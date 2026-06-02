@@ -3,64 +3,154 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FedEx Batch Shipping Bot — v0.3</title>
+<title>FedEx QuickShip — Batch Shipping</title>
+<meta name="description" content="Turn messy ServiceNow tickets into validated FedEx shipments and Ship Manager CSV.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
-  body { font-family: 'Manrope', system-ui, sans-serif; }
-  .mono { font-family: 'JetBrains Mono', monospace; }
-  .field-error { border-color: #f87171 !important; background-color: #fef2f2 !important; }
-  .field-warn  { border-color: #fbbf24 !important; background-color: #fffbeb !important; }
-  .field-ok    { border-color: #86efac !important; }
-  textarea, input, select { transition: all 150ms; }
-  .pill { padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
-  .mode-btn {
-    padding: 6px 14px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
-    border-radius: 6px; transition: all 120ms; cursor: pointer; border: none;
+  :root{
+    --brand:#4D148C; --brand-700:#3a0f6b; --brand-300:#7a3fc0; --brand-tint:#f4effb;
+    --accent:#FF6600; --accent-600:#e85b00; --accent-tint:#fff3ea;
+    --ink:#1d1830; --muted:#6b6880; --line:#ece9f3; --line-soft:#f2f0f8;
+    --bg-1:#f8f7fc; --bg-2:#efedf6; --card:#ffffff;
+    --radius:16px;
+    --shadow:0 1px 2px rgba(29,24,48,.04), 0 12px 28px -16px rgba(29,24,48,.16);
+    --shadow-lg:0 1px 3px rgba(29,24,48,.06), 0 30px 60px -24px rgba(29,24,48,.24);
   }
-  .mode-btn-active   { background: #f97316; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-  .mode-btn-inactive { background: transparent; color: #94a3b8; }
-  .mode-btn-inactive:hover { background: #334155; color: #fff; }
-  .modal-backdrop { background: rgba(15, 23, 42, 0.7); }
+  *{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  html{ scroll-behavior:smooth; }
+  body{
+    font-family:'Inter', system-ui, sans-serif; color:var(--ink);
+    letter-spacing:-0.004em;
+    background:
+      radial-gradient(1100px 560px at 100% -8%, rgba(77,20,140,.05), transparent 58%),
+      radial-gradient(820px 480px at -8% 2%, rgba(255,102,0,.038), transparent 55%),
+      linear-gradient(180deg, var(--bg-1), var(--bg-2));
+    background-attachment:fixed;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; letter-spacing:0; }
+  h1, h2, h3, h4, .step{ font-family:'Sora', 'Inter', system-ui, sans-serif; letter-spacing:-0.02em; }
+
+  /* ---------- Form controls ---------- */
+  input:not([type=checkbox]):not([type=radio]), select, textarea{
+    border:1px solid var(--line) !important;
+    background:#fff !important; color:var(--ink);
+    border-radius:10px !important; padding:9px 11px !important;
+    box-shadow:0 1px 1px rgba(18,16,40,.02);
+    transition:border-color .15s, box-shadow .15s, background .15s;
+  }
+  textarea{ padding:12px !important; line-height:1.55; }
+  input:focus, select:focus, textarea:focus{
+    outline:none !important; border-color:var(--brand) !important;
+    box-shadow:0 0 0 3px rgba(77,20,140,.13) !important;
+  }
+  select{ cursor:pointer; }
+  ::placeholder{ color:#a7adbe; }
+
+  .field-error { border-color:#f87171 !important; background:#fef2f2 !important; box-shadow:0 0 0 3px rgba(248,113,113,.12) !important; }
+  .field-warn  { border-color:#fbbf24 !important; background:#fffbeb !important; box-shadow:0 0 0 3px rgba(251,191,36,.14) !important; }
+  .field-ok    { border-color:#6ee7b7 !important; box-shadow:0 0 0 3px rgba(16,185,129,.11) !important; }
+
+  /* ---------- Cards ---------- */
+  .card{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--radius); padding:1.4rem;
+    box-shadow:var(--shadow);
+    transition:box-shadow .22s ease, transform .22s ease, border-color .22s ease;
+  }
+  .card:hover{ box-shadow:var(--shadow-lg); border-color:#ddd2ee; }
+  /* Small utility / sample chips */
+  .chip{
+    font-size:.7rem; font-weight:600; padding:4px 10px; border-radius:8px;
+    background:var(--brand-tint); color:var(--brand); border:1px solid #e7ddf4;
+    transition:all .15s;
+  }
+  .chip:hover{ background:#ebe0f8; border-color:#d9c7f0; }
+
+  /* ---------- Buttons ---------- */
+  button{ transition:all .15s ease; }
+  button:not(:disabled){ cursor:pointer; }
+  button:not(:disabled):active{ transform:translateY(1px); }
+  .btn-primary{ background:var(--brand) !important; color:#fff !important; box-shadow:0 8px 18px -8px rgba(77,20,140,.6); }
+  .btn-primary:not(:disabled):hover{ background:var(--brand-700) !important; }
+  .btn-accent{ background:var(--accent) !important; color:#fff !important; box-shadow:0 8px 18px -8px rgba(255,102,0,.55); }
+  .btn-accent:not(:disabled):hover{ background:var(--accent-600) !important; }
+
+  /* ---------- Step badge ---------- */
+  .step{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:27px; height:27px; border-radius:9px; flex:none; margin-right:.65rem;
+    background:linear-gradient(135deg, var(--brand), #6a23b8); color:#fff;
+    font-weight:800; font-size:.82rem; box-shadow:0 5px 12px -4px rgba(77,20,140,.55);
+  }
+
+  /* ---------- Pills / mode toggle ---------- */
+  .pill{ padding:3px 10px; border-radius:9999px; font-size:.7rem; font-weight:700; letter-spacing:.01em; }
+  .mode-btn{
+    padding:7px 15px; font-size:.76rem; font-weight:700; letter-spacing:.04em;
+    border-radius:8px; transition:all .15s; cursor:pointer; border:none;
+  }
+  .mode-btn-active   { background:var(--accent); color:#fff; box-shadow:0 5px 14px -5px rgba(255,102,0,.7); }
+  .mode-btn-inactive { background:transparent; color:rgba(255,255,255,.55); }
+  .mode-btn-inactive:hover { background:rgba(255,255,255,.12); color:#fff; }
+
+  /* ---------- Header ---------- */
+  .app-header{
+    position:sticky; top:0; z-index:40;
+    background:linear-gradient(118deg, #2c1150 0%, #4d148c 56%, #341760 100%);
+    box-shadow:0 12px 38px -20px rgba(24,10,52,.65);
+  }
+  .app-header::after{ content:''; display:block; height:3px;
+    background:linear-gradient(90deg, var(--accent), #ff9a52, var(--accent)); }
+  .brand-logo{
+    background:var(--accent); color:#fff; font-weight:800; letter-spacing:.12em;
+    padding:5px 9px; border-radius:7px; box-shadow:0 6px 14px -5px rgba(255,102,0,.6);
+  }
+
+  /* ---------- Misc ---------- */
+  .modal-backdrop{ background:rgba(22,16,34,.62); backdrop-filter:blur(5px); }
+  ::selection{ background:rgba(77,20,140,.18); }
+  *::-webkit-scrollbar{ width:11px; height:11px; }
+  *::-webkit-scrollbar-thumb{ background:#cdd2e2; border-radius:9999px; border:3px solid transparent; background-clip:content-box; }
+  *::-webkit-scrollbar-thumb:hover{ background:#b6bcd0; background-clip:content-box; }
   .pulse-saved { animation: pulse-saved 1.5s ease-out; }
-  @keyframes pulse-saved {
-    0%   { color: #10b981; }
-    100% { color: #94a3b8; }
-  }
+  @keyframes pulse-saved { 0%{ color:#10b981; } 100%{ color:#94a3b8; } }
 </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen">
 
-<header class="bg-slate-900 text-white border-b-4 border-orange-500">
+<header class="app-header text-white">
   <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-3">
     <div>
       <div class="flex items-center gap-3">
-        <div class="bg-orange-500 px-2 py-1 mono text-xs font-bold tracking-wider">FEDEX</div>
-        <h1 class="text-xl font-bold">Batch Shipping Bot</h1>
-        <span class="mono text-xs text-slate-400">v0.3</span>
+        <div class="brand-logo mono text-xs">FEDEX</div>
+        <h1 class="text-xl font-extrabold tracking-tight">QuickShip</h1>
+        <span class="mono text-[11px] text-white/45 border border-white/20 rounded-full px-2 py-0.5">v0.3</span>
       </div>
-      <p class="text-xs text-slate-400 mt-1">ServiceNow ticket → validated shipment → Ship Manager CSV · Outbound &amp; Return labels</p>
+      <p class="text-xs text-white/55 mt-1.5">ServiceNow ticket → validated shipment → Ship Manager CSV · Outbound &amp; Return labels</p>
     </div>
 
     <!-- Mode toggle -->
-    <div class="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
+    <div class="flex items-center gap-1 bg-black/25 rounded-lg p-1 ring-1 ring-white/10">
       <button id="modeOutboundBtn" class="mode-btn mode-btn-active">📦 OUTBOUND</button>
       <button id="modeReturnBtn"   class="mode-btn mode-btn-inactive">↩ RETURN</button>
     </div>
 
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-5">
       <div class="text-right">
-        <div class="text-xs text-slate-400">Queue</div>
-        <div class="mono text-xl font-bold" id="queueCount">0</div>
+        <div class="text-[10px] uppercase tracking-wider text-white/45 font-semibold">Queue</div>
+        <div class="mono text-2xl font-extrabold leading-none mt-0.5" id="queueCount">0</div>
       </div>
-      <button id="generateCsvBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded transition disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+      <button id="generateCsvBtn" class="btn-accent font-bold px-5 py-2.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none" disabled>
         Generate CSV ↓
       </button>
     </div>
   </div>
-  <div class="max-w-7xl mx-auto px-6 pb-2 text-[11px] text-slate-400 flex items-center justify-between">
+  <div class="max-w-7xl mx-auto px-6 pb-3 text-[11px] text-white/55 flex items-center justify-between">
     <div id="modeHint">Outbound: ship from Aspen warehouse to remote user (ticket caller).</div>
-    <div id="saveIndicator" class="mono">●</div>
+    <div id="saveIndicator" class="mono text-white/45">●</div>
   </div>
 </header>
 
@@ -68,25 +158,25 @@
 
   <!-- LEFT: PASTE & PARSE -->
   <section class="space-y-4">
-    <div class="bg-white rounded-lg border border-slate-200 p-5">
+    <div class="card">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="font-bold text-slate-900">1. Paste ticket or email</h2>
+        <h2 class="font-extrabold text-slate-900 flex items-center text-[15px]"><span class="step">1</span>Paste ticket or email</h2>
         <div class="flex gap-2 flex-wrap">
-          <button id="loadSample1" class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Sample: iPad (INC)</button>
-          <button id="loadSample2" class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Sample: Laptop (INC)</button>
-          <button id="loadSample3" class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Sample: Equip Request (RITM)</button>
-          <button id="clearTicket"  class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Clear</button>
+          <button id="loadSample1" class="chip mono">Sample: iPad (INC)</button>
+          <button id="loadSample2" class="chip mono">Sample: Laptop (INC)</button>
+          <button id="loadSample3" class="chip mono">Sample: Equip Request (RITM)</button>
+          <button id="clearTicket"  class="chip mono">Clear</button>
         </div>
       </div>
       <textarea id="ticketText" rows="14" placeholder="Paste ServiceNow ticket text OR a forwarded email containing recipient details…" class="w-full mono text-xs border border-slate-300 rounded p-3 focus:outline-none focus:border-slate-900"></textarea>
       <div class="flex items-center justify-between mt-3">
         <div id="parseStatus" class="text-xs text-slate-500">No ticket parsed yet.</div>
-        <button id="parseBtn" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded text-sm">Parse Ticket →</button>
+        <button id="parseBtn" class="btn-primary font-bold px-5 py-2.5 rounded-lg text-sm">Parse Ticket →</button>
       </div>
     </div>
 
     <!-- Parser findings -->
-    <div id="findingsCard" class="bg-white rounded-lg border border-slate-200 p-5 hidden">
+    <div id="findingsCard" class="card hidden">
       <h3 class="font-bold text-slate-900 mb-3">What the parser found</h3>
       <div class="grid grid-cols-2 gap-2 text-xs mono" id="findingsList"></div>
     </div>
@@ -94,8 +184,8 @@
 
   <!-- RIGHT: SHIPMENT FORM -->
   <section class="space-y-4">
-    <div class="bg-white rounded-lg border border-slate-200 p-5">
-      <h2 class="font-bold text-slate-900 mb-3">2. Configure shipment</h2>
+    <div class="card">
+      <h2 class="font-extrabold text-slate-900 mb-4 flex items-center text-[15px]"><span class="step">2</span>Configure shipment</h2>
 
       <!-- ====== SENDER (mode-dependent) ====== -->
       <div id="senderBlock">
@@ -232,16 +322,16 @@
       <!-- Validation summary -->
       <div id="validationBox" class="mt-4 p-3 rounded text-xs border hidden"></div>
 
-      <button id="addToBatchBtn" class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded transition disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+      <button id="addToBatchBtn" class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg shadow-lg shadow-emerald-600/25 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none" disabled>
         Add to Batch +
       </button>
     </div>
   </section>
 
   <!-- BOTTOM: BATCH QUEUE -->
-  <section class="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-5">
+  <section class="lg:col-span-2 card">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-      <h2 class="font-bold text-slate-900">3. Batch queue</h2>
+      <h2 class="font-extrabold text-slate-900 flex items-center text-[15px]"><span class="step">3</span>Batch queue</h2>
       <div class="flex items-center gap-2">
         <span class="text-xs text-slate-500">Exported as one CSV for Ship Manager Plus upload.</span>
         <button id="clearQueueBtn" class="text-xs px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 hidden">Clear queue</button>
@@ -374,8 +464,9 @@
   </div>
 </div>
 
-<footer class="max-w-7xl mx-auto px-6 py-4 text-xs text-slate-500 border-t border-slate-200 mt-8">
-  <strong class="text-slate-700">v0.3.</strong> 11 technician sender profiles · CI/asset tracking · paired outbound + return labels. Parser is heuristic — verify every field before generating the CSV. Queue persists in your browser via localStorage.
+<footer class="max-w-7xl mx-auto px-6 py-6 text-xs text-slate-500 border-t border-slate-200 mt-10 flex items-center gap-3 flex-wrap">
+  <span class="brand-logo mono text-[10px]">FEDEX</span>
+  <span><strong class="text-slate-700">QuickShip v0.3</strong> · 11 technician sender profiles · CI/asset tracking · paired outbound + return labels. Parser is heuristic — verify every field before generating the CSV. Queue persists in your browser via localStorage.</span>
 </footer>
 
 <script>
@@ -384,7 +475,6 @@
 // =================================================================
 
 const STORAGE_KEY = 'fedexBot.v0.3';
-const DEFAULT_PHONE = '3154546000';   // shared fallback when a ticket has no usable phone
 
 // Every technician below gets an outbound sender profile auto-built from this base.
 // Change the address here once → all 11 profiles update. Each profile only differs
@@ -504,7 +594,7 @@ const EQUIPMENT_FIELD_MAP = [
   // Other peripherals
   { labels: ['Do you need a webcam', 'Webcam', 'Camera'], type: 'webcam' },
   { labels: ['Do you need a headset', 'Headset', 'Headphones'], type: 'headset' },
-  { labels: ['Do you need a docking station', 'Docking station', 'Docking Station', 'Dock'], type: 'dock' },
+  { labels: ['Do you need a docking station', 'Docking Station', 'Docking station', 'Dock'], type: 'dock' },
   { labels: ['Charger', 'Power Adapter', 'Power Supply', 'PSU'], type: 'charger' }
 ];
 
@@ -534,7 +624,7 @@ const FIELD_LABELS_GLOBAL = new Set([
   '-- None --','Notes','Related Records','Resolution Information','Ticket Administration',
   'Transfer to scoped app','Stage','Contact type','Opened','Opened by','Due date',
   'Email Address','Primary Contact Number','EPMS patient URL','Additional assignee list',
-  'Watch list','Work notes','Variables','Additional information','Item','Facility'
+  'Watch list','Work notes','Variables','Additional information','Item'
 ]);
 
 const SNOW_FORM_FIELDS_BASE = [
@@ -544,18 +634,26 @@ const SNOW_FORM_FIELDS_BASE = [
   'Keyboard type','Mouse type','Headset type','Number of monitors',
   'Short description','Item','Item description',
   // INC layout (label on one line, value on next line — no colon)
-  'Caller','Phone Number','Configuration item',
-  // New Hire Equipment Request layout — flavor A / flavor C
+  'Caller','Phone Number',
+  // New Hire Equipment Request layout — flavor A
   'Role of the New Hire','First Name','Last Name','Cellphone Number',
   'Personal Email Address','Personal address','Start Date','Job Title',
-  'Hiring Manager','Department','New Hire First Name','New Hire Last Name',
+  'Hiring Manager','Department',
   // New Hire / Transfer layout — flavor B (different labels for the same data)
   'Requested By','Requested For First Name','Requested For Last Name',
   'New Employee Personal Email','New Employee Phone Number','New Employee Home address',
   'Is the Employee a New Employee or a Transfer','Will the New Employee be fully Remote',
   'What location Will They Report To',
+  // New Hire Equipment Request layout — flavor C (legacy "New Hire ..." labels)
+  'New Hire First Name','New Hire Last Name','Role Of The New Hire',
+  'What PSC Will They Report To?','Where would the new employee be on their first day',
+  'Number of tablets required','Type of headset','Docking station',
+  'Computer Name','Facility','Please select the laptop type',
+  'Please select Mac model','Please select Mac size','Windows Laptop Type',
   // Specs / software — captured for display, never make a shipping label
-  'Computer Type','Laptop Type','Softphone'
+  'Computer Type','Laptop Type','Softphone',
+  // Asset identifier on INC tickets (header "Configuration item" → value line)
+  'Configuration item'
 ];
 
 // Auto-include every equipment label from EQUIPMENT_FIELD_MAP so the parser
@@ -565,6 +663,12 @@ const SNOW_FORM_FIELDS = (() => {
   EQUIPMENT_FIELD_MAP.forEach(entry => entry.labels.forEach(l => set.add(l)));
   return [...set];
 })();
+
+// Address-type labels whose value can span several following lines
+// (street / unit / city-state-zip), collected until the next form label.
+const MULTILINE_ADDRESS_LABELS = new Set([
+  'Address', 'Personal address', 'New Employee Home address'
+]);
 
 // Validates that a 2-letter token is actually a real US state/territory.
 // Prevents "AC", "IT", "OS", etc. from being misread as states.
@@ -595,10 +699,6 @@ const STATE_NAMES_BY_LENGTH = Object.keys(STATE_NAME_TO_ABBR).sort((a,b) => b.le
 
 // Detects an apartment/suite/unit indicator so we can split it off into Line 2.
 const UNIT_PATTERN = /(?:\b(?:apt|apartment|ste|suite|unit|fl|floor|bldg|building|rm|room)\.?\s*[\w\d#\-]+|#\s*[\w\d\-]+)/i;
-
-// Field labels whose value is a (possibly multi-line) mailing address. The structured
-// parser collects following lines until the next field label or a state+ZIP terminator.
-const ADDRESS_LABELS = new Set(['Address', 'Personal address', 'New Employee Home address']);
 
 // =================================================================
 // SAMPLES
@@ -799,6 +899,10 @@ function getAllSenderProfiles() {
 // PARSER (with bug fixes)
 // =================================================================
 
+// Fallback phone for the FedEx label when the ticket has no usable number
+// (blank, "Teams", etc.). This is the Aspen IT Service Desk main line.
+const DEFAULT_PHONE = '3154546000';
+
 // Splits a Line 1 candidate at the first unit indicator so apt/suite goes to Line 2.
 function splitLine1Line2(rawLine1) {
   if (!rawLine1) return { line1: '', line2: '' };
@@ -812,18 +916,18 @@ function splitLine1Line2(rawLine1) {
   return { line1, line2 };
 }
 
-// Splits a part that jams the street and city together with no comma, e.g.
-// "48 Pine Hill Rd Berwick" → { street: "48 Pine Hill Rd", city: "Berwick" }.
-// Uses a street-type suffix as the boundary. Returns null if no suffix is found.
-function splitStreetCity(s) {
-  const SUFFIX = /\b(st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|way|pl|place|cir|circle|ter|terrace|pkwy|parkway|hwy|highway|loop|trail|trl|pike|run|sq|square|row)\b/ig;
-  let last = null, m;
-  while ((m = SUFFIX.exec(s)) !== null) last = m;
-  if (!last) return null;
-  const end = last.index + last[0].length;
-  const street = s.slice(0, end).trim();
-  const city = s.slice(end).trim().replace(/^[\s,]+/, '');
-  if (!street || !city || /\d/.test(city)) return null;  // city must be word(s), no digits
+// Street-suffix anchored splitter: separates a combined "street city" string
+// (no comma between them, e.g. "48 Pine Hill Rd Berwick") into its street and
+// city parts. Returns null if no street suffix is found.
+const STREET_SUFFIX_RE = /\b(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Pl|Place|Ter|Terrace|Trl|Trail|Sq|Square|Loop|Run|Pass|Path|Xing|Crossing|Pike|Row|Walk|Bnd|Bend|Cv|Cove|Plaza|Aly|Alley)\b\.?(?:\s+(?:N|S|E|W|NE|NW|SE|SW)\b)?/i;
+function splitStreetCity(combined) {
+  if (!combined || !/^\d/.test(combined)) return null;
+  const sm = combined.match(STREET_SUFFIX_RE);
+  if (!sm) return null;
+  const cut = sm.index + sm[0].length;
+  const street = combined.slice(0, cut).trim();
+  const city = combined.slice(cut).trim().replace(/^[,\s]+/, '');
+  if (!street || !city || /^\d/.test(city) || city.length < 2) return null;
   return { street, city };
 }
 
@@ -873,30 +977,32 @@ function parseAddressLine(addr) {
   if (!city && stateZipIdx > 0) city = parts[stateZipIdx - 1].trim();
   if (!city || US_STATES.has(city.toUpperCase())) return null;
 
-  // CARE-OF / ATTENTION handling. Recognize an optional leading recipient NAME and an
-  // optional "%" / "c/o" line before the street:
-  //   "Name"            → careOf (the real recipient, used as the label name)
-  //   "% Someone"       → Line 2 (a care-of / attention line)
+  // LEADING NON-STREET LINES (care-of / attention block). The street is the
+  // first part that starts with a number or "PO Box". Anything before it is
+  // either:
+  //   - a "% Name" / "c/o Name" line  → goes to address Line 2, OR
+  //   - a bare person's name          → the real care-of recipient.
   let careOf = null;
-  let coLine2 = null;
   let startIdx = 0;
-  const looksName = (p) => p && !/^\d/.test(p) && !/^P\.?\s*O\.?\s*Box/i.test(p) &&
-                           p.length <= 40 && /^[A-Za-z][A-Za-z .'\-]+$/.test(p);
-  const looksCareOf = (p) => /^(%|c\/o\b|care\s*of\b|attn\b)/i.test(p);
-  if (parts.length >= 3 && looksName(parts[0])) {
-    if (/^\d/.test(parts[1])) {
-      careOf = parts[0].trim(); startIdx = 1;                                  // name → street
-    } else if (looksCareOf(parts[1]) && /^\d/.test(parts[2] || '')) {
-      careOf = parts[0].trim(); coLine2 = parts[1].trim(); startIdx = 2;       // name → "%" → street
-    }
-  } else if (parts.length >= 2 && looksCareOf(parts[0]) && /^\d/.test(parts[1] || '')) {
-    coLine2 = parts[0].trim(); startIdx = 1;                                   // "%" → street (no name)
+  let careOfLine2 = '';
+  const cityIdx = cityInline ? -1 : stateZipIdx - 1;
+  let streetIdx = -1;
+  for (let i = 0; i < parts.length; i++) {
+    if (i === cityIdx || i === stateZipIdx) break;
+    if (/^\d/.test(parts[i]) || /^P\.?\s*O\.?\s*Box/i.test(parts[i])) { streetIdx = i; break; }
   }
-
-  // Street and city jammed into one part with no comma, e.g. "48 Pine Hill Rd Berwick".
-  if (city && /^\d/.test(city) && (stateZipIdx - 1) === startIdx) {
-    const sc = splitStreetCity(city);
-    if (sc) { parts[startIdx] = sc.street; city = sc.city; }
+  if (streetIdx > 0) {
+    for (let i = 0; i < streetIdx; i++) {
+      const p = parts[i].trim();
+      if (/^(%|c\/o\b)/i.test(p)) {
+        // Care-of marker line — keep verbatim on Line 2.
+        careOfLine2 = careOfLine2 ? `${careOfLine2}, ${p}` : p;
+      } else if (!careOf && p.length <= 40 && /^[A-Za-z][A-Za-z .'\-]+$/.test(p)) {
+        // Bare name → the package physically ships to this person.
+        careOf = p;
+      }
+    }
+    startIdx = streetIdx;
   }
 
   let line1 = parts[startIdx];
@@ -905,7 +1011,16 @@ function parseAddressLine(addr) {
   // Anything between Line 1 and the city/state-zip belongs in Line 2 (unit/suite/etc.)
   const lastLine2Idx = cityInline ? stateZipIdx - 1 : stateZipIdx - 2;
   if (lastLine2Idx >= startIdx + 1) line2 = parts.slice(startIdx + 1, lastLine2Idx + 1).join(', ');
-  if (coLine2) line2 = line2 ? `${coLine2}, ${line2}` : coLine2;
+  // Prepend any care-of marker line captured above.
+  if (careOfLine2) line2 = line2 ? `${careOfLine2}, ${line2}` : careOfLine2;
+
+  // Street and city sometimes share one comma-segment with no comma between them
+  // (e.g. "48 Pine Hill Rd Berwick, ME 03901"). When the city candidate still
+  // carries the street number, split it at the street suffix.
+  if (line1 === city && /^\d/.test(city)) {
+    const sc = splitStreetCity(city);
+    if (sc) { line1 = sc.street; city = sc.city; }
+  }
 
   // Also pull apt/suite out of Line 1 itself if present
   const split = splitLine1Line2(line1);
@@ -943,10 +1058,10 @@ function parseStructuredFields(text) {
     const labelCandidate = lines[i].replace(/:$/, '').trim();
     if (!SNOW_FORM_FIELDS.includes(labelCandidate)) continue;
 
-    // Address can span multiple lines (street, apt, city/state/zip).
-    // Collect lines until we hit another field label or a state+zip terminator.
-    if (ADDRESS_LABELS.has(labelCandidate)) {
-      if (fields[labelCandidate]) continue;   // already captured
+    // Address can span multiple lines (street, apt, city/state/zip). This applies
+    // to the standard "Address" label and the New Hire home-address variants.
+    if (MULTILINE_ADDRESS_LABELS.has(labelCandidate)) {
+      if (fields[labelCandidate]) continue;   // already captured inline
       const addressLines = [];
       let j = i + 1;
       while (j < lines.length && addressLines.length < 5) {
@@ -1166,7 +1281,7 @@ function parseTicket(text) {
     ticketNumber: null, callerName: null, callerEmail: null, callerPhone: null,
     line1: null, line2: null, city: null, state: null, zip: null,
     company: null, items: [], configurationItem: null,
-    shippingGate: 'unknown', shippingGateReason: null,
+    shippingGate: 'none', shippingGateReason: null,
     confidence: {}
   };
 
@@ -1192,7 +1307,6 @@ function parseTicket(text) {
   const nhLast  = structured['Last Name']  || structured['Requested For Last Name']  || structured['New Hire Last Name'];
   const isNewHire = !!(nhFirst || nhLast ||
                        /New\s*Hire|New\s*Hire\s*or\s*(?:User\s*)?Transfer|new\s*hire\s*or\s*transfer/i.test(text));
-  result._isNewHire = isNewHire;   // always record it (false for normal tickets), not only on the new-hire branch
 
   // Pull a name out of the short description for New Hire tickets.
   const nameFromShortDesc = () => {
@@ -1208,8 +1322,8 @@ function parseTicket(text) {
     return null;
   };
 
+  result._isNewHire = isNewHire;
   if (isNewHire) {
-    result._isNewHire = true;
     result._submitter = structured['Requested for'] || structured['Requested By'] || null;
     if (nhFirst || nhLast) {
       result.callerName = `${(nhFirst||'').trim()} ${(nhLast||'').trim()}`.replace(/\s+/g, ' ').trim();
@@ -1261,8 +1375,7 @@ function parseTicket(text) {
     }
     result.confidence.callerEmail = 'medium';
   }
-
-  // Normalize email to lowercase (the label/CSV want a canonical address).
+  // Email addresses are case-insensitive — normalize to lowercase.
   if (result.callerEmail) result.callerEmail = result.callerEmail.toLowerCase();
 
   // 3) Company
@@ -1307,6 +1420,14 @@ function parseTicket(text) {
       result.callerPhone = normalizePhone(phoneMatches[0][0]);
       result.confidence.callerPhone = phoneMatches.length > 1 ? 'medium' : 'high';
     }
+  }
+  // Phone fallback: a blank field, a "Teams"-only value, or no number at all
+  // leaves callerPhone empty (or non-10-digit). Use the service-desk default
+  // line so the label is still printable, and flag that we substituted it.
+  if (!result.callerPhone || result.callerPhone.length !== 10) {
+    result.callerPhone = DEFAULT_PHONE;
+    result._phoneDefaulted = true;
+    result.confidence.callerPhone = 'low';
   }
 
   // 5) Address — try each candidate source; for each, parse with the comma-aware
@@ -1361,9 +1482,9 @@ function parseTicket(text) {
   }
 
   // 6) Shipping gate
-  //   open    = "Is this being shipped: Yes"  (and every New Hire — they always ship)
-  //   blocked = "Is this being shipped: No"   (no address required)
-  //   none    = no shipping-gate field present at all (typical INC)
+  //   "open"    = explicit "Is this being shipped: Yes" OR any New Hire ticket
+  //   "blocked" = explicit "Is this being shipped: No"
+  //   "none"    = no gate field present (typical INC / software-only requests)
   if (structured['Is this being shipped']) {
     const v = structured['Is this being shipped'].toLowerCase().trim();
     if (v === 'no') {
@@ -1373,38 +1494,38 @@ function parseTicket(text) {
       result.shippingGate = 'open';
     }
   } else if (isNewHire) {
-    result.shippingGate = 'open';   // New Hire / Transfer tickets always ship
-  } else {
-    result.shippingGate = 'none';   // no gate field on this ticket
+    // New Hire / Transfer tickets always ship to the new employee.
+    result.shippingGate = 'open';
   }
 
-  // 7) Configuration item / asset / serial — try multiple sources and combine.
-  // Ignores ServiceNow placeholders like "*Computer", "Computer", "Other", "iPad".
-  const isPlaceholderCI = (v) =>
-    !v || /^\*?computer$/i.test(v) || /^(other|ipad|n\/a|none)$/i.test(v) || v.length < 4;
-  const found = [];
-  // 7a) Structured "Configuration item" field (label-then-value layout, e.g. "cms944").
-  // Only accept values that look like an asset tag — a single token containing a
-  // digit — so descriptive categories like "Internet Link" are NOT treated as a CI.
-  const looksLikeTag = (v) => /^[A-Za-z0-9][A-Za-z0-9\-\/]{2,}$/.test(v) && /\d/.test(v);
-  const ciField = structured['Configuration item'];
-  if (ciField) {
-    const v = ciField.trim().replace(/\.$/, '');
-    if (!isPlaceholderCI(v) && looksLikeTag(v)) found.push(v);
-  }
-  // 7b) Inline patterns scanned from the body.
+  // 7) Configuration item / asset / serial — try multiple patterns and combine.
+  // Ignores ServiceNow placeholder values like "*Computer" or just "Computer".
   const assetPatterns = [
     /Asset\s*ID\s*#?\s*:?\s*([A-Za-z0-9]+[\-\s]?[A-Za-z0-9]{3,})/i,
     /\bs\/?n\s*[:#]?\s*([A-Za-z0-9]+\-[A-Za-z0-9]+)/i,
     /\bserial\s*(?:number|no|#)?\s*[:#]?\s*([A-Za-z0-9]+\-[A-Za-z0-9]+)/i,
     /(?:Configuration\s*[Ii]tem|\bCI\b)[\s:\-]*([A-Za-z]{2,5}\-[A-Za-z0-9]{4,})/,
-    /#\s*([A-Za-z]{3,5}\-[A-Za-z0-9]{5,})/   // inline device tag, e.g. "#ATGB-LDLC94M5QF"
+    // Inline device asset tag in free text, e.g. "...lost connection #ATGB-LDLC94M5QF".
+    /#([A-Za-z]{2,5}\-[A-Za-z0-9]{4,})/
   ];
+  const found = [];
+  // Placeholders / free-text values that are NOT real asset tags.
+  const isPlaceholderCI = v =>
+    !v || /^\*?computer$/i.test(v) || /^(other|ipad|tablet|laptop|desktop|none|n\/a)$/i.test(v) ||
+    /\s/.test(v) ||                       // multi-word phrase (e.g. "Internet Link")
+    !/\d/.test(v) ||                      // a real tag carries at least one digit
+    v.length < 4;
+  // Structured "Configuration item" field (INC header) — a single asset-tag token.
+  const ciField = structured['Configuration item'];
+  if (ciField && !isPlaceholderCI(ciField.trim())) {
+    found.push(ciField.trim().replace(/\.$/, ''));
+  }
   for (const pattern of assetPatterns) {
     const m = text.match(pattern);
     if (!m) continue;
     const val = m[1].trim().replace(/\.$/, '');
-    if (isPlaceholderCI(val)) continue;
+    // Skip useless ServiceNow placeholders
+    if (!val || /^\*?computer$/i.test(val) || val.length < 4) continue;
     if (!found.includes(val)) found.push(val);
   }
   if (found.length > 0) result.configurationItem = found.join(' / ');
@@ -1474,6 +1595,15 @@ function parseTicket(text) {
     }
   }
 
+  // 8b) Missing-address audit — when a ticket is actually shipping (gate open)
+  // but the destination address is incomplete, list the missing fields so the
+  // tech knows exactly what to chase down.
+  if (result.shippingGate === 'open') {
+    const required = ['line1', 'city', 'state', 'zip'];
+    const missing = required.filter(f => !result[f]);
+    if (missing.length > 0) result._missingRequired = missing;
+  }
+
   // 9) Name fallback (signature scan)
   if (!result.callerName && result.callerEmail) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -1491,25 +1621,6 @@ function parseTicket(text) {
       }
     }
   }
-
-  // Phone fallback: blank / "Teams" / unparseable → use the shared default number
-  // and flag it so the user knows it was auto-filled rather than read from the ticket.
-  if (!result.callerPhone) {
-    result.callerPhone = DEFAULT_PHONE;
-    result._phoneDefaulted = true;
-  }
-
-  // Completeness check — list which required fields are still missing so the
-  // queue/validation can hold the row back. Short labels on purpose.
-  const _reqChecks = [
-    ['callerName', 'name'],
-    ['line1', 'address'],
-    ['city', 'city'],
-    ['state', 'state'],
-    ['zip', 'zip'],
-    ['callerPhone', 'phone'],
-  ];
-  result._missingRequired = _reqChecks.filter(([f]) => !result[f]).map(([, label]) => label);
 
   return result;
 }
