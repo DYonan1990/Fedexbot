@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FedEx Batch Shipping Bot — v0.3</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Manrope', system-ui, sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .field-error { border-color: #f87171 !important; background-color: #fef2f2 !important; }
+  .field-warn  { border-color: #fbbf24 !important; background-color: #fffbeb !important; }
+  .field-ok    { border-color: #86efac !important; }
+  textarea, input, select { transition: all 150ms; }
+  .pill { padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+  .mode-btn {
+    padding: 6px 14px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
+    border-radius: 6px; transition: all 120ms; cursor: pointer; border: none;
+  }
+  .mode-btn-active   { background: #f97316; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .mode-btn-inactive { background: transparent; color: #94a3b8; }
+  .mode-btn-inactive:hover { background: #334155; color: #fff; }
+  .modal-backdrop { background: rgba(15, 23, 42, 0.7); }
+  .pulse-saved { animation: pulse-saved 1.5s ease-out; }
+  @keyframes pulse-saved {
+    0%   { color: #10b981; }
+    100% { color: #94a3b8; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<header class="bg-slate-900 text-white border-b-4 border-orange-500">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-3">
+    <div>
+      <div class="flex items-center gap-3">
+        <div class="bg-orange-500 px-2 py-1 mono text-xs font-bold tracking-wider">FEDEX</div>
+        <h1 class="text-xl font-bold">Batch Shipping Bot</h1>
+        <span class="mono text-xs text-slate-400">v0.3</span>
+      </div>
+      <p class="text-xs text-slate-400 mt-1">ServiceNow ticket → validated shipment → Ship Manager CSV · Outbound &amp; Return labels</p>
+    </div>
+
+    <!-- Mode toggle -->
+    <div class="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
+      <button id="modeOutboundBtn" class="mode-btn mode-btn-active">📦 OUTBOUND</button>
+      <button id="modeReturnBtn"   class="mode-btn mode-btn-inactive">↩ RETURN</button>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <div class="text-right">
+        <div class="text-xs text-slate-400">Queue</div>
+        <div class="mono text-xl font-bold" id="queueCount">0</div>
+      </div>
+      <button id="generateCsvBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded transition disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+        Generate CSV ↓
+      </button>
+    </div>
+  </div>
+  <div class="max-w-7xl mx-auto px-6 pb-2 text-[11px] text-slate-400 flex items-center justify-between">
+    <div id="modeHint">Outbound: ship from Aspen warehouse to remote user (ticket caller).</div>
+    <div id="saveIndicator" class="mono">●</div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- LEFT: PASTE & PARSE -->
+  <section class="space-y-4">
+    <div class="bg-white rounded-lg border border-slate-200 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-bold text-slate-900">1. Paste ticket or email</h2>
+        <div class="flex gap-2 flex-wrap">
+          <button id="loadSample1" class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Sample: iPad (INC)</button>
+          <button id="loadSample2" class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Sample: Laptop (INC)</button>
+          <button id="loadSample3" class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Sample: Equip Request (RITM)</button>
+          <button id="clearTicket"  class="text-xs mono px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">Clear</button>
+        </div>
+      </div>
+      <textarea id="ticketText" rows="14" placeholder="Paste ServiceNow ticket text OR a forwarded email containing recipient details…" class="w-full mono text-xs border border-slate-300 rounded p-3 focus:outline-none focus:border-slate-900"></textarea>
+      <div class="flex items-center justify-between mt-3">
+        <div id="parseStatus" class="text-xs text-slate-500">No ticket parsed yet.</div>
+        <button id="parseBtn" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded text-sm">Parse Ticket →</button>
+      </div>
+    </div>
+
+    <!-- Parser findings -->
+    <div id="findingsCard" class="bg-white rounded-lg border border-slate-200 p-5 hidden">
+      <h3 class="font-bold text-slate-900 mb-3">What the parser found</h3>
+      <div class="grid grid-cols-2 gap-2 text-xs mono" id="findingsList"></div>
+    </div>
+  </section>
+
+  <!-- RIGHT: SHIPMENT FORM -->
+  <section class="space-y-4">
+    <div class="bg-white rounded-lg border border-slate-200 p-5">
+      <h2 class="font-bold text-slate-900 mb-3">2. Configure shipment</h2>
+
+      <!-- ====== SENDER (mode-dependent) ====== -->
+      <div id="senderBlock">
+        <!-- Outbound: profile dropdown -->
+        <div id="senderProfileMode">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Sender / Origin (profile)</label>
+            <button id="manageProfilesBtn" class="text-[11px] text-slate-600 hover:text-slate-900 underline">Manage profiles</button>
+          </div>
+          <select id="senderProfile" class="w-full border border-slate-300 rounded p-2 text-sm"></select>
+          <div id="senderProfilePreview" class="mt-1 text-[11px] text-slate-500 mono"></div>
+        </div>
+
+        <!-- Return: editable form for customer-as-sender -->
+        <div id="senderEditMode" class="hidden">
+          <label class="block text-xs font-semibold text-slate-700 mb-2">Sender / Origin (from ticket — the customer returning the item)</label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">Name *</label>
+              <input id="senderName" class="w-full border border-slate-300 rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">Phone *</label>
+              <input id="senderPhone" class="w-full border border-slate-300 rounded p-2 text-sm mono">
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="block text-xs text-slate-600 mb-1">Company / Location</label>
+            <input id="senderCompany" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+          <div class="mb-2">
+            <label class="block text-xs text-slate-600 mb-1">Street Line 1 *</label>
+            <input id="senderLine1" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+          <div class="mb-2">
+            <label class="block text-xs text-slate-600 mb-1">Line 2</label>
+            <input id="senderLine2" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+          <div class="grid grid-cols-3 gap-2 mb-2">
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">City *</label>
+              <input id="senderCity" class="w-full border border-slate-300 rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">State *</label>
+              <input id="senderState" class="w-full border border-slate-300 rounded p-2 text-sm mono uppercase" maxlength="2">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">ZIP *</label>
+              <input id="senderZip" class="w-full border border-slate-300 rounded p-2 text-sm mono" maxlength="10">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== ITEMS ====== -->
+      <div class="mt-5 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-semibold text-slate-700">Items to ship</label>
+          <div class="text-[11px] text-slate-500"><span id="itemSummary">0 items → 0 labels</span></div>
+        </div>
+        <div id="itemsList" class="space-y-2 mb-2"></div>
+        <button id="addItemBtn" type="button" class="w-full text-xs border border-dashed border-slate-300 hover:border-slate-500 hover:bg-slate-50 text-slate-600 py-2 rounded transition">+ Add item</button>
+        <div class="text-[11px] text-slate-500 mt-1 italic">Each item = one box = one label. Multiple monitors? Set Qty.</div>
+      </div>
+
+      <!-- ====== RECIPIENT (mode-dependent) ====== -->
+      <div id="recipientBlock">
+        <!-- Outbound: editable form for customer-as-recipient -->
+        <div id="recipientEditMode">
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-5">Recipient / Destination</h3>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">Name *</label>
+              <input id="recipName" class="w-full border border-slate-300 rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">Phone *</label>
+              <input id="recipPhone" class="w-full border border-slate-300 rounded p-2 text-sm mono" placeholder="6029382707">
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="block text-xs text-slate-600 mb-1">Street Line 1 *</label>
+            <input id="recipLine1" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+          <div class="mb-2">
+            <label class="block text-xs text-slate-600 mb-1">Line 2 (suite, floor)</label>
+            <input id="recipLine2" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+          <div class="grid grid-cols-3 gap-2 mb-2">
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">City *</label>
+              <input id="recipCity" class="w-full border border-slate-300 rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">State *</label>
+              <input id="recipState" class="w-full border border-slate-300 rounded p-2 text-sm mono uppercase" maxlength="2">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">ZIP *</label>
+              <input id="recipZip" class="w-full border border-slate-300 rounded p-2 text-sm mono" maxlength="10">
+            </div>
+          </div>
+        </div>
+
+        <!-- Return: technician dropdown -->
+        <div id="recipientTechMode" class="hidden">
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-5">Return to (Technician)</h3>
+          <select id="technicianSelect" class="w-full border border-slate-300 rounded p-2 text-sm mb-2"></select>
+          <div id="techAddressPreview" class="text-[11px] mono bg-slate-50 border border-slate-200 rounded p-2 leading-relaxed"></div>
+          <div class="text-[10px] text-slate-500 mt-1 italic">All technicians use the Aspen Chicago PSC3 address. Contact name auto-updates per selection.</div>
+        </div>
+      </div>
+
+      <!-- ====== SERVICE & PACKAGE ====== -->
+      <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 mt-5">Service &amp; Reference</h3>
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">Service Type</label>
+          <select id="serviceType" class="w-full border border-slate-300 rounded p-2 text-sm mono text-xs">
+            <option value="PRIORITY_OVERNIGHT">PRIORITY_OVERNIGHT</option>
+            <option value="STANDARD_OVERNIGHT">STANDARD_OVERNIGHT</option>
+            <option value="FEDEX_2_DAY">FEDEX_2_DAY</option>
+            <option value="FEDEX_EXPRESS_SAVER">FEDEX_EXPRESS_SAVER</option>
+            <option value="FEDEX_GROUND">FEDEX_GROUND</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">Reference (Ticket #) *</label>
+          <input id="reference" class="w-full border border-slate-300 rounded p-2 text-sm mono">
+        </div>
+      </div>
+
+      <!-- Validation summary -->
+      <div id="validationBox" class="mt-4 p-3 rounded text-xs border hidden"></div>
+
+      <button id="addToBatchBtn" class="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded transition disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+        Add to Batch +
+      </button>
+    </div>
+  </section>
+
+  <!-- BOTTOM: BATCH QUEUE -->
+  <section class="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-5">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <h2 class="font-bold text-slate-900">3. Batch queue</h2>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-500">Exported as one CSV for Ship Manager Plus upload.</span>
+        <button id="clearQueueBtn" class="text-xs px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 hidden">Clear queue</button>
+      </div>
+    </div>
+    <div id="queueTable" class="text-xs overflow-x-auto">
+      <div class="text-slate-400 italic text-center py-8">No shipments queued. Parse a ticket and add it to the batch.</div>
+    </div>
+  </section>
+
+  <!-- CSV OUTPUT -->
+  <section id="csvPanel" class="lg:col-span-2 bg-slate-900 text-white rounded-lg p-5 hidden">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-bold">CSV Output</h2>
+      <div class="flex gap-2">
+        <button id="copyCsvBtn"     class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded text-xs">Copy to Clipboard</button>
+        <button id="downloadCsvBtn" class="bg-orange-500  hover:bg-orange-600  text-white font-bold px-3 py-1.5 rounded text-xs">Download .csv</button>
+        <button id="closeCsvBtn"    class="bg-slate-700   hover:bg-slate-600   text-white         px-3 py-1.5 rounded text-xs">Close</button>
+      </div>
+    </div>
+    <div id="copyStatus" class="text-xs text-slate-400 mb-2">Select all (⌘/Ctrl+A) inside the box, copy, then paste into a .csv file or directly into Ship Manager.</div>
+    <textarea id="csvOutput" readonly class="w-full mono text-[11px] bg-black text-emerald-300 border border-slate-700 rounded p-3 focus:outline-none" rows="10"></textarea>
+  </section>
+
+</main>
+
+<!-- ============ MANAGE PROFILES MODAL ============ -->
+<div id="profilesModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4" style="display: none;">
+  <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 sticky top-0 bg-white">
+      <h3 class="font-bold text-slate-900">Manage Sender Profiles</h3>
+      <button id="closeProfilesModalBtn" class="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Saved profiles</h4>
+        <div id="profilesList" class="space-y-2"></div>
+      </div>
+
+      <div class="border-t border-slate-200 pt-4">
+        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Add new profile</h4>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Profile Label *</label>
+            <input id="newProfileLabel" class="w-full border border-slate-300 rounded p-2 text-sm" placeholder="e.g. Aspen Syracuse Warehouse">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Contact Name *</label>
+            <input id="newSenderContactName" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Company</label>
+            <input id="newSenderCompany" class="w-full border border-slate-300 rounded p-2 text-sm" value="Aspen Dental">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Phone *</label>
+            <input id="newSenderPhone" class="w-full border border-slate-300 rounded p-2 text-sm mono">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="block text-xs text-slate-600 mb-1">Street Line 1 *</label>
+          <input id="newSenderLine1" class="w-full border border-slate-300 rounded p-2 text-sm">
+        </div>
+        <div class="mb-2">
+          <label class="block text-xs text-slate-600 mb-1">Line 2</label>
+          <input id="newSenderLine2" class="w-full border border-slate-300 rounded p-2 text-sm">
+        </div>
+        <div class="grid grid-cols-3 gap-2 mb-2">
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">City *</label>
+            <input id="newSenderCity" class="w-full border border-slate-300 rounded p-2 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">State *</label>
+            <input id="newSenderState" class="w-full border border-slate-300 rounded p-2 text-sm mono uppercase" maxlength="2">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">ZIP *</label>
+            <input id="newSenderZip" class="w-full border border-slate-300 rounded p-2 text-sm mono">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="block text-xs text-slate-600 mb-1">Email</label>
+          <input id="newSenderEmail" class="w-full border border-slate-300 rounded p-2 text-sm mono">
+        </div>
+        <button id="saveNewProfileBtn" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 rounded text-sm">Add Profile</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RETURN-LABEL PROMPT MODAL ============ -->
+<div id="returnPromptModal" class="fixed inset-0 modal-backdrop hidden items-center justify-center z-50 p-4" style="display: none;">
+  <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+    <div class="bg-amber-50 border-b border-amber-200 px-5 py-3">
+      <h3 class="font-bold text-slate-900">↩ Add a return label for this shipment?</h3>
+      <p class="text-[11px] text-slate-600 mt-1">Most outbound shipments need a return label so the user can ship the old device back.</p>
+    </div>
+    <div class="p-5 space-y-4 text-xs">
+      <div id="returnPromptSummary" class="bg-slate-50 rounded p-3 leading-relaxed"></div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Return to (Technician)</label>
+        <select id="returnPromptTechnician" class="w-full border border-slate-300 rounded p-2 text-sm"></select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Items the user is returning</label>
+        <div id="returnPromptItems" class="space-y-1"></div>
+        <div class="text-[10px] text-slate-500 mt-1 italic">Default: same as outbound. Uncheck anything they aren't returning.</div>
+      </div>
+
+      <div class="border-t border-slate-200 pt-3 space-y-2">
+        <label class="flex items-center gap-2 text-[11px] text-slate-600">
+          <input type="checkbox" id="returnPromptSameRef" checked>
+          Use same ticket reference for the return label
+        </label>
+        <label class="flex items-center gap-2 text-[10px] text-slate-500">
+          <input type="checkbox" id="returnPromptDontAskAgain">
+          Don't ask again this session (you can still use the Return mode toggle anytime)
+        </label>
+      </div>
+    </div>
+    <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
+      <button id="returnPromptSkipBtn" class="text-sm text-slate-600 hover:text-slate-900 px-3 py-2">Skip — no return needed</button>
+      <button id="returnPromptAddBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded text-sm">Add return label →</button>
+    </div>
+  </div>
+</div>
+
+<footer class="max-w-7xl mx-auto px-6 py-4 text-xs text-slate-500 border-t border-slate-200 mt-8">
+  <strong class="text-slate-700">v0.3.</strong> 11 technician sender profiles · CI/asset tracking · paired outbound + return labels. Parser is heuristic — verify every field before generating the CSV. Queue persists in your browser via localStorage.
+</footer>
+
+<script>
+// =================================================================
+// CONSTANTS
+// =================================================================
+
+const STORAGE_KEY = 'fedexBot.v0.3';
+const DEFAULT_PHONE = '3154546000';   // shared fallback when a ticket has no usable phone
+
+// Every technician below gets an outbound sender profile auto-built from this base.
+// Change the address here once → all 11 profiles update. Each profile only differs
+// by senderContactName (Desktop Support PSC3-{Name}).
+const SHARED_SENDER_ADDRESS = {
+  senderCompany:       'Aspen Dental',
+  senderContactNumber: '3154546000',
+  senderLine1:         '813 W Wayman St',
+  senderLine2:         '17TH FLOOR',
+  senderCity:          'Chicago',
+  senderState:         'IL',
+  senderPostcode:      '60607',
+  senderCountry:       'US',
+  senderEmail:         'shippinghelp@aspendental.com'
+};
+
+// Built dynamically below from the TECHNICIANS list so the outbound sender
+// dropdown and the return technician dropdown are ALWAYS in sync.
+const BUILTIN_SENDER_PROFILES = {};
+
+// Used as the return address for ALL technicians — only contact name changes.
+const RETURN_ADDRESS = {
+  company: 'Aspen Dental',
+  phone: '3154546000',
+  line1: '813 W Wayman St',
+  line2: '17TH FLOOR',
+  city: 'Chicago',
+  state: 'IL',
+  postcode: '60607',
+  country: 'US',
+  email: 'shippinghelp@aspendental.com'
+};
+
+const TECHNICIANS = [
+  { id: 'daniel-yonan',     name: 'Daniel Yonan' },
+  { id: 'john-geddes',      name: 'John Geddes' },
+  { id: 'ahmad-shams',      name: 'Ahmad Masih Shams Salamudin' },
+  { id: 'ethan-armour',     name: 'Ethan Armour' },
+  { id: 'ron-blair',        name: 'Ron Blair' },
+  { id: 'luis-mijares',     name: 'Luis Mijares' },
+  { id: 'brandon-hamm',     name: 'Brandon Hamm' },
+  { id: 'vicente-ramirez',  name: 'Vicente Ramirez' },
+  { id: 'garrett-berg',     name: 'Garrett Berg' },
+  { id: 'michael-gillette', name: 'Michael Gillette' },
+  { id: 'jacob-thomas',     name: 'Jacob Thomas' }
+];
+
+// Auto-build one outbound sender profile per technician (shared address, name only changes).
+TECHNICIANS.forEach(t => {
+  BUILTIN_SENDER_PROFILES[`tech-${t.id}`] = {
+    label: `${t.name} — Aspen Chicago PSC3`,
+    senderContactName: `Desktop Support PSC3-${t.name}`,
+    ...SHARED_SENDER_ADDRESS,
+    _builtin: true,
+    _technicianId: t.id
+  };
+});
+
+const ITEM_PRESETS = {
+  monitor:  { label: 'Monitor',         weight: 12,  length: 24, width: 18, height: 8 },
+  keyboard: { label: 'Keyboard',        weight: 1.5, length: 18, width: 6,  height: 3 },
+  mouse:    { label: 'Mouse',           weight: 0.5, length: 6,  width: 4,  height: 2 },
+  webcam:   { label: 'Webcam',          weight: 0.7, length: 5,  width: 4,  height: 3 },
+  headset:  { label: 'Headset',         weight: 1.5, length: 10, width: 8,  height: 4 },
+  dock:     { label: 'Docking Station', weight: 2,   length: 10, width: 8,  height: 3 },
+  laptop:   { label: 'Laptop',          weight: 6,   length: 18, width: 14, height: 4 },
+  desktop:  { label: 'Desktop / Tower', weight: 20,  length: 24, width: 12, height: 22 },
+  ipad:     { label: 'iPad / Tablet',   weight: 2,   length: 10, width: 7,  height: 4 },
+  charger:  { label: 'Charger / PSU',   weight: 1,   length: 8,  width: 6,  height: 3 },
+  custom:   { label: 'Custom item',     weight: 0,   length: 0,  width: 0,  height: 0 }
+};
+
+const DOMAIN_TO_COMPANY = {
+  'aspendental.com': 'Aspen',
+  'clearchoice.com': 'ClearChoice',
+  'teamtag.com':     'TAG',
+  'wellnow.com':     'WellNow',
+  'lovet.com':       'Lovet'
+};
+
+// ===== EQUIPMENT FIELD MAP =====================================================
+// Drives dropdown-based detection. Each entry maps a ServiceNow equipment field
+// label to the item(s) that field produces. Works across ALL ticket layouts
+// (standard RITM "Do you need a X", New Hire "X", etc.) with one rule:
+//   A field counts as APPROVED if its value is anything OTHER than blank,
+//   "No", "None", "0", or "-- None --".  (i.e. "Yes", "Wireless", "2", etc.)
+//
+// - type: the ITEM_PRESETS key to add.
+// - qtyFrom: optional OTHER field label whose numeric value sets the quantity.
+// - multi: optional array of types to add together (e.g. "Mouse / Keyboard").
+// - valueAsType: if true, the field's value picks the item type (e.g.
+//   Computer Type: Laptop / Desktop / iPad).
+//
+// NON-SHIPPABLE FIELDS (intentionally NOT in this map, never make a label):
+//   - "Laptop Type" (Standard / High-Performance) — a spec OF the laptop, not
+//     a separate device. The laptop itself comes from "Computer Type".
+//   - "Softphone" (Yes / No) — software installed on the device, nothing ships.
+//   - "Role of the New Hire", "Start Date", "Job Title", etc. — metadata.
+const EQUIPMENT_FIELD_MAP = [
+  // Computer type — the value names the device. (NOT "Laptop Type" — that's a spec.)
+  { labels: ['Computer Type', 'Device Type'], valueAsType: true,
+    typeMap: { laptop:'laptop', notebook:'laptop', macbook:'laptop',
+               desktop:'desktop', tower:'desktop', workstation:'desktop',
+               ipad:'ipad', tablet:'ipad' } },
+
+  // Monitors — quantity comes from "Number of monitors"
+  { labels: ['Do you need a monitor', 'Monitor', 'Monitors'], type: 'monitor',
+    qtyFrom: 'Number of monitors' },
+  { labels: ['Number of monitors'], type: 'monitor', selfQty: true },
+
+  // Keyboard / mouse — separately or combined
+  { labels: ['Do you need a keyboard', 'Keyboard'], type: 'keyboard' },
+  { labels: ['Do you need a mouse', 'Mouse'], type: 'mouse' },
+  { labels: ['Mouse / Keyboard', 'Keyboard / Mouse', 'Keyboard and Mouse'],
+    multi: ['keyboard', 'mouse'] },
+
+  // Other peripherals
+  { labels: ['Do you need a webcam', 'Webcam', 'Camera'], type: 'webcam' },
+  { labels: ['Do you need a headset', 'Headset', 'Headphones'], type: 'headset' },
+  { labels: ['Do you need a docking station', 'Docking station', 'Docking Station', 'Dock'], type: 'dock' },
+  { labels: ['Charger', 'Power Adapter', 'Power Supply', 'PSU'], type: 'charger' }
+];
+
+// Fields that look like equipment but never ship a physical item.
+// Captured for display/notes but excluded from label generation.
+const NON_SHIPPABLE_FIELDS = new Set(['Softphone', 'Laptop Type']);
+
+// Values that mean "not approved / not needed".
+const NEGATIVE_VALUES = new Set(['', 'no', 'none', '0', '-- none --', 'n/a', 'false']);
+
+function isApproved(rawValue) {
+  if (rawValue == null) return false;
+  const v = String(rawValue).trim().toLowerCase();
+  if (NEGATIVE_VALUES.has(v)) return false;
+  // A bare "0" anywhere (e.g. "0 monitors") is also negative
+  if (/^0(\s|$)/.test(v)) return false;
+  return true;
+}
+
+
+// Hoisted ABOVE parseStructuredFields so it's actually defined when used.
+const FIELD_LABELS_GLOBAL = new Set([
+  'Phone Number','Office Direct Extension','Category','Subcategory','Location',
+  'Location Time Zone','Configuration item','Channel','State','Impact','Urgency',
+  'Priority','Assignment group','Assigned to','Site impact','Short description',
+  'Description','Watch list','Work notes list','Number','Caller','Active',
+  '-- None --','Notes','Related Records','Resolution Information','Ticket Administration',
+  'Transfer to scoped app','Stage','Contact type','Opened','Opened by','Due date',
+  'Email Address','Primary Contact Number','EPMS patient URL','Additional assignee list',
+  'Watch list','Work notes','Variables','Additional information','Item','Facility'
+]);
+
+const SNOW_FORM_FIELDS_BASE = [
+  // RITM / SCTASK layout
+  'Requested by','Requested for','Company','Location/Facility – Ship to',
+  'Is this being shipped','Address','Contact number',
+  'Keyboard type','Mouse type','Headset type','Number of monitors',
+  'Short description','Item','Item description',
+  // INC layout (label on one line, value on next line — no colon)
+  'Caller','Phone Number','Configuration item',
+  // New Hire Equipment Request layout — flavor A / flavor C
+  'Role of the New Hire','First Name','Last Name','Cellphone Number',
+  'Personal Email Address','Personal address','Start Date','Job Title',
+  'Hiring Manager','Department','New Hire First Name','New Hire Last Name',
+  // New Hire / Transfer layout — flavor B (different labels for the same data)
+  'Requested By','Requested For First Name','Requested For Last Name',
+  'New Employee Personal Email','New Employee Phone Number','New Employee Home address',
+  'Is the Employee a New Employee or a Transfer','Will the New Employee be fully Remote',
+  'What location Will They Report To',
+  // Specs / software — captured for display, never make a shipping label
+  'Computer Type','Laptop Type','Softphone'
+];
+
+// Auto-include every equipment label from EQUIPMENT_FIELD_MAP so the parser
+// always captures the value of any equipment dropdown, no matter the layout.
+const SNOW_FORM_FIELDS = (() => {
+  const set = new Set(SNOW_FORM_FIELDS_BASE);
+  EQUIPMENT_FIELD_MAP.forEach(entry => entry.labels.forEach(l => set.add(l)));
+  return [...set];
+})();
+
+// Validates that a 2-letter token is actually a real US state/territory.
+// Prevents "AC", "IT", "OS", etc. from being misread as states.
+const US_STATES = new Set([
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
+  'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
+  'VA','WA','WV','WI','WY','DC','PR','VI','GU','AS','MP'
+]);
+
+// Full state names → abbreviations, for tickets that spell the state out
+// (e.g. "Murray, Utah 84117"). Sorted longest-first when matched so
+// "New Hampshire" wins over a shorter partial.
+const STATE_NAME_TO_ABBR = {
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+  'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA',
+  'michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT',
+  'nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ','new mexico':'NM',
+  'new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+  'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+  'district of columbia':'DC','puerto rico':'PR'
+};
+const STATE_NAMES_BY_LENGTH = Object.keys(STATE_NAME_TO_ABBR).sort((a,b) => b.length - a.length);
+
+// Detects an apartment/suite/unit indicator so we can split it off into Line 2.
+const UNIT_PATTERN = /(?:\b(?:apt|apartment|ste|suite|unit|fl|floor|bldg|building|rm|room)\.?\s*[\w\d#\-]+|#\s*[\w\d\-]+)/i;
+
+// Field labels whose value is a (possibly multi-line) mailing address. The structured
+// parser collects following lines until the next field label or a state+ZIP terminator.
+const ADDRESS_LABELS = new Set(['Address', 'Personal address', 'New Employee Home address']);
+
+// =================================================================
+// SAMPLES
+// =================================================================
+
+const SAMPLE_IPAD = `Incident
+INC2183113
+
+Caller: Tammy Sheedy
+Phone Number: (602) 938-2707
+
+State: In Progress
+Priority: 4 - Normal
+
+Short description: iPad has lost connection to the internet
+Description: I pad has lost connection to the internet, will not allow us to use the guest internet either #ATGB-LDLC94M5QF
+
+Activities:
+
+Tammy Sheedy - Additional comments - 04/23/2026 11:49:24
+reply from: tammy.sheedy@lovet.com
+5130 W Thunderbird Rd
+Glendale, AZ 85306
+602-938-2707
+Tammy Sheedy
+Hospital Manager
+Lovet Pet Health Care | Arrow
+5130 West Thunderbird Rd, Glendale, AZ 85306
+P: (602) 938-2707 | F: (602) 938-2934
+Tammy.Sheedy@lovet.com
+
+Daniel Yonan - Work notes - 04/22/2026 10:15:32
+[TICKET] INC2183113
+Issue:
+- iPad has lost internet connectivity
+- Device will not connect to guest internet
+Configuration Item:
+- ATGB-LDLC94M5QF`;
+
+const SAMPLE_RITM = `All activities are displayed
+Requested Item
+RITM1972751
+Number
+RITM1972751
+Item
+Standard User Equipment
+Request
+REQ1966870
+Requested for
+Neha Doshi
+Primary Contact Number
+Email Address
+Location
+0006 - Remote Users
+Stage
+Fulfillment
+State
+Open
+Assignment group
+SN Corporate PC Tech Alerts
+Assigned to
+Daniel Yonan
+Short description
+Standard user equipment request for Neha Doshi
+Description
+Variables
+Requested by
+Neha Doshi
+ Requested for
+Neha Doshi
+ Company
+TAG
+ Location/Facility – Ship to:
+0006 - Remote Users
+ Is this being shipped
+Yes
+ Address
+2460 Bottlebrush Dr, Prosper-TX 75078
+ Contact number
+201-912-7726
+Additional information
+ Do you need a monitor
+No
+ Do you need a keyboard
+No
+ Do you need a mouse
+Yes
+ Mouse type
+Wireless
+ Do you need a webcam
+No
+Do you need a headset
+Yes
+ Headset type
+Wireless
+Do you need a docking station
+No
+Activities: 6
+System
+Email sent
+To:daniel.yonan@teamtag.com
+System
+Email sent
+To:Neha.Doshi@teamtag.com`;
+
+const SAMPLE_LAPTOP_RAW = `All activities are displayed
+
+Incident
+INC2181361
+
+Number
+Caller
+Phone Number
+Office Direct Extension
+Category
+Subcategory
+Activities: 13
+
+DY
+Daniel Yonan
+Additional comments •
+04/20/2026 15:12:38
+15520 Peach Leaf Lane, North Potomac, MD 20878
+
+System
+Email sent•
+04/17/2026 10:57:14
+Email sent
+Subject:Your Incident INC2181361 has comments added
+From:IT Service Desk
+To:bgoodluck@clearchoice.com
+
+DY
+Daniel Yonan
+Work notes•
+04/17/2026 10:57:08
+[TICKET] INC2181361Issue- Device freezing behavior- Mouse cursor moves but cannot click- Keyboard shortcuts not functioningDevice Info- Model: Lenovo ThinkPad P15 Gen 2- CI: aglt-pf33lcc7
+
+EG
+Earl Gwin
+Field changes•
+04/16/2026 12:58:07
+
+Activetrue
+Assignment groupSN Corporate PC Tech Alerts
+Configuration itemaglt-pf33lcc7`;
+
+// =================================================================
+// STATE & PERSISTENCE
+// =================================================================
+
+let STATE = {
+  mode: 'outbound',                    // 'outbound' | 'return'
+  queue: [],
+  customSenderProfiles: {},
+  lastUsedSenderId: 'tech-daniel-yonan',
+  lastUsedTechnicianId: 'daniel-yonan',
+  lastUsedService: 'PRIORITY_OVERNIGHT'
+};
+
+let itemsList = [];
+let currentParse = null;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      STATE = { ...STATE, ...parsed };
+    }
+  } catch (e) {
+    console.warn('Failed to load saved state:', e);
+  }
+}
+
+let saveTimer = null;
+function saveState() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+      const ind = $('saveIndicator');
+      ind.textContent = '● saved ' + new Date().toLocaleTimeString();
+      ind.classList.remove('pulse-saved');
+      void ind.offsetWidth; // force reflow to restart animation
+      ind.classList.add('pulse-saved');
+    } catch (e) {
+      console.warn('Failed to save state:', e);
+    }
+  }, 200);
+}
+
+function getAllSenderProfiles() {
+  return { ...BUILTIN_SENDER_PROFILES, ...STATE.customSenderProfiles };
+}
+
+// =================================================================
+// PARSER (with bug fixes)
+// =================================================================
+
+// Splits a Line 1 candidate at the first unit indicator so apt/suite goes to Line 2.
+function splitLine1Line2(rawLine1) {
+  if (!rawLine1) return { line1: '', line2: '' };
+  const match = rawLine1.match(UNIT_PATTERN);
+  if (!match) return { line1: rawLine1.trim(), line2: '' };
+  const idx = match.index;
+  let breakIdx = idx;
+  while (breakIdx > 0 && /[\s,]/.test(rawLine1[breakIdx - 1])) breakIdx--;
+  const line1 = rawLine1.substring(0, breakIdx).trim().replace(/,$/, '').trim();
+  const line2 = rawLine1.substring(idx).trim();
+  return { line1, line2 };
+}
+
+// Splits a part that jams the street and city together with no comma, e.g.
+// "48 Pine Hill Rd Berwick" → { street: "48 Pine Hill Rd", city: "Berwick" }.
+// Uses a street-type suffix as the boundary. Returns null if no suffix is found.
+function splitStreetCity(s) {
+  const SUFFIX = /\b(st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|way|pl|place|cir|circle|ter|terrace|pkwy|parkway|hwy|highway|loop|trail|trl|pike|run|sq|square|row)\b/ig;
+  let last = null, m;
+  while ((m = SUFFIX.exec(s)) !== null) last = m;
+  if (!last) return null;
+  const end = last.index + last[0].length;
+  const street = s.slice(0, end).trim();
+  const city = s.slice(end).trim().replace(/^[\s,]+/, '');
+  if (!street || !city || /\d/.test(city)) return null;  // city must be word(s), no digits
+  return { street, city };
+}
+
+// Parses an address that may be multi-line or single-line.
+// Handles:
+//   "2460 Bottlebrush Dr, Prosper-TX 75078"
+//   "123 Main St\nApt 4B\nSpringfield, IL 62701"
+//   "123 Main St, Apt 4B, Springfield, IL 62701"
+function parseAddressLine(addr) {
+  if (!addr) return null;
+  const parts = addr.split(/[\n,]/).map(p => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+
+  // Find the part that contains a valid state + zip
+  let stateZipIdx = -1, state = null, zip = null, cityInline = null;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const m = parts[i].match(/^(.+?[\s\-]+)?([A-Za-z]{2})\.?[\s\-]+(\d{5})(?:-\d{4})?\s*$/);
+    if (m && US_STATES.has(m[2].toUpperCase())) {
+      stateZipIdx = i;
+      state = m[2].toUpperCase();
+      zip   = m[3];
+      cityInline = m[1] ? m[1].replace(/[\s\-,]+$/, '').trim() : null;
+      break;
+    }
+  }
+
+  // Fallback: state and ZIP split across two adjacent parts, e.g. a double-comma
+  // address "Louisville, KY, 40299" → [..., 'KY', '40299']. Detect a bare 2-letter
+  // state part immediately followed by a bare 5-digit ZIP part.
+  if (stateZipIdx === -1) {
+    for (let i = parts.length - 1; i >= 1; i--) {
+      const zipPart = parts[i].match(/^(\d{5})(?:-\d{4})?$/);
+      const statePart = parts[i-1].match(/^([A-Za-z]{2})\.?$/);
+      if (zipPart && statePart && US_STATES.has(statePart[1].toUpperCase())) {
+        state = statePart[1].toUpperCase();
+        zip   = zipPart[1];
+        stateZipIdx = i - 1;   // city is the part before the state
+        cityInline = null;
+        break;
+      }
+    }
+  }
+
+  if (stateZipIdx === -1) return null;
+
+  let city = cityInline;
+  if (!city && stateZipIdx > 0) city = parts[stateZipIdx - 1].trim();
+  if (!city || US_STATES.has(city.toUpperCase())) return null;
+
+  // CARE-OF / ATTENTION handling. Recognize an optional leading recipient NAME and an
+  // optional "%" / "c/o" line before the street:
+  //   "Name"            → careOf (the real recipient, used as the label name)
+  //   "% Someone"       → Line 2 (a care-of / attention line)
+  let careOf = null;
+  let coLine2 = null;
+  let startIdx = 0;
+  const looksName = (p) => p && !/^\d/.test(p) && !/^P\.?\s*O\.?\s*Box/i.test(p) &&
+                           p.length <= 40 && /^[A-Za-z][A-Za-z .'\-]+$/.test(p);
+  const looksCareOf = (p) => /^(%|c\/o\b|care\s*of\b|attn\b)/i.test(p);
+  if (parts.length >= 3 && looksName(parts[0])) {
+    if (/^\d/.test(parts[1])) {
+      careOf = parts[0].trim(); startIdx = 1;                                  // name → street
+    } else if (looksCareOf(parts[1]) && /^\d/.test(parts[2] || '')) {
+      careOf = parts[0].trim(); coLine2 = parts[1].trim(); startIdx = 2;       // name → "%" → street
+    }
+  } else if (parts.length >= 2 && looksCareOf(parts[0]) && /^\d/.test(parts[1] || '')) {
+    coLine2 = parts[0].trim(); startIdx = 1;                                   // "%" → street (no name)
+  }
+
+  // Street and city jammed into one part with no comma, e.g. "48 Pine Hill Rd Berwick".
+  if (city && /^\d/.test(city) && (stateZipIdx - 1) === startIdx) {
+    const sc = splitStreetCity(city);
+    if (sc) { parts[startIdx] = sc.street; city = sc.city; }
+  }
+
+  let line1 = parts[startIdx];
+  let line2 = '';
+
+  // Anything between Line 1 and the city/state-zip belongs in Line 2 (unit/suite/etc.)
+  const lastLine2Idx = cityInline ? stateZipIdx - 1 : stateZipIdx - 2;
+  if (lastLine2Idx >= startIdx + 1) line2 = parts.slice(startIdx + 1, lastLine2Idx + 1).join(', ');
+  if (coLine2) line2 = line2 ? `${coLine2}, ${line2}` : coLine2;
+
+  // Also pull apt/suite out of Line 1 itself if present
+  const split = splitLine1Line2(line1);
+  if (split.line2) {
+    line1 = split.line1;
+    line2 = line2 ? `${split.line2}, ${line2}` : split.line2;
+  }
+
+  const out = { line1, line2, city, state, zip };
+  if (careOf) out.careOf = careOf;
+  return out;
+}
+
+function parseStructuredFields(text) {
+  const fields = {};
+  const lines = text.split('\n').map(l => l.replace(/^[\s ]+/, '').trim());
+    // PASS 1 - inline "Label: value" pairs on a single line (common in work notes,
+  // e.g. "Phone: 757-754-1304" or "Address: 68777 Open Field Dr Montrose CO 81401").
+  const inlineLabels = {
+    'phone': 'Phone Number', 'phone number': 'Phone Number', 'contact': 'Contact number',
+    'contact number': 'Contact number', 'cell': 'Phone Number', 'mobile': 'Phone Number',
+    'address': 'Address', 'shipping address': 'Address', 'ship to': 'Address'
+  };
+  for (const ___line of lines) {
+    const ___im = ___line.match(/^([A-Za-z][A-Za-z\/ ]{1,24}?)\s*:\s*(.+)$/);
+    if (!___im) continue;
+    const ___key = ___im[1].trim().toLowerCase();
+    const ___val = ___im[2].trim();
+    if (!inlineLabels[___key] || !___val || fields[inlineLabels[___key]]) continue;
+    if (inlineLabels[___key] === 'Address' && !/\d{5}(?:-\d{4})?/.test(___val)) continue;
+    fields[inlineLabels[___key]] = ___val;
+  }
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const labelCandidate = lines[i].replace(/:$/, '').trim();
+    if (!SNOW_FORM_FIELDS.includes(labelCandidate)) continue;
+
+    // Address can span multiple lines (street, apt, city/state/zip).
+    // Collect lines until we hit another field label or a state+zip terminator.
+    if (ADDRESS_LABELS.has(labelCandidate)) {
+      if (fields[labelCandidate]) continue;   // already captured
+      const addressLines = [];
+      let j = i + 1;
+      while (j < lines.length && addressLines.length < 5) {
+        const next = lines[j];
+        if (!next) { j++; continue; }
+        const nextLabel = next.replace(/:$/, '').trim();
+        if (SNOW_FORM_FIELDS.includes(nextLabel)) break;
+        if (FIELD_LABELS_GLOBAL.has(next)) break;
+        if (next.startsWith('-- None --')) break;
+        addressLines.push(next);
+        if (/\b[A-Za-z]{2}\.?\s+\d{5}(?:-\d{4})?\s*$/.test(next)) { j++; break; }
+        j++;
+      }
+      if (addressLines.length > 0) fields[labelCandidate] = addressLines.join('\n');
+      i = j - 1;
+      continue;
+    }
+
+    const value = lines[i+1];
+    if (value &&
+        !SNOW_FORM_FIELDS.includes(value.replace(/:$/, '').trim()) &&
+        !value.startsWith('-- None --') &&
+        !FIELD_LABELS_GLOBAL.has(value) &&
+        !fields[labelCandidate]) {
+      fields[labelCandidate] = value;
+    }
+  }
+  return fields;
+}
+
+// For each candidate state+zip anchor, look in the ~300 chars immediately before it
+// for a "<digits> <street>, [unit,] <city>" pattern. Handles addresses embedded inside
+// long sentences in work notes / email bodies, where line-based walk-back fails because
+// the whole sentence is on one line.
+function tryInlineAddressMatch(before) {
+  const startRegex = /\d{1,6}\s+/g;
+  const startPositions = [];
+  let m;
+  while ((m = startRegex.exec(before)) !== null) startPositions.push(m.index);
+
+  // Try the rightmost <digits><space> first — that's typically the real street number,
+  // not some incidental quantity earlier in the sentence.
+  for (let i = startPositions.length - 1; i >= 0; i--) {
+    const substring = before.substring(startPositions[i]);
+    // street, [optional unit/middle parts,] city
+    const match = substring.match(
+      /^(\d{1,6}\s+[\w.\-'#& ]{2,80}?)(,\s*[\w.\-'#& ,]{2,150}?)?,\s*([\w.\-'#& ]{2,40})\s*[,\s\-]*$/
+    );
+    if (!match) continue;
+
+    const line1 = match[1].trim();
+    let line2 = '';
+    if (match[2]) {
+      line2 = match[2]
+        .replace(/^,\s*/, '')
+        .split(/,\s*/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .join(', ');
+    }
+    const city = match[3].trim();
+    return { line1, line2, city };
+  }
+  return null;
+}
+
+// Anchor-based parser for unstructured ticket text (INC tickets, work notes, email signatures).
+// Two strategies, tried in order:
+//   A) Inline: address sits inside a long sentence like "...shipping address 1809 Lucera Bnd,
+//      Leander, TX 78641 confirmed..." — handled by tryInlineAddressMatch.
+//   B) Multi-line: street on one line, unit/city/state-zip on following lines — walk-back.
+function parseAddressFromText(text) {
+  // Permissive anchor: accepts "ST 12345", "ST  12345", "ST - 12345", "ST-12345",
+  // and "ST. 12345" (with trailing period — common in handwritten work notes).
+  const anchorRegex = /\b([A-Za-z]{2})\.?[\s\-]+(\d{5})(?:-\d{4})?\b/g;
+  const candidates = [];
+  let m;
+  while ((m = anchorRegex.exec(text)) !== null) {
+    if (US_STATES.has(m[1].toUpperCase())) {
+      candidates.push({ state: m[1].toUpperCase(), zip: m[2], index: m.index });
+    }
+  }
+
+  // ALSO anchor on spelled-out state names ("Murray, Utah 84117").
+  // Build a regex of all full names, longest first so multi-word names win.
+  const nameAlt = STATE_NAMES_BY_LENGTH.join('|').replace(/ /g, '\\s+');
+  const fullNameRegex = new RegExp('\\b(' + nameAlt + ')\\.?[\\s,]+(\\d{5})(?:-\\d{4})?\\b', 'gi');
+  while ((m = fullNameRegex.exec(text)) !== null) {
+    const abbr = STATE_NAME_TO_ABBR[m[1].toLowerCase().replace(/\s+/g, ' ')];
+    if (abbr) {
+      // Point the index just past the state name so walk-back excludes it
+      candidates.push({ state: abbr, zip: m[2], index: m.index, _stateNameLen: m[1].length });
+    }
+  }
+  // Sort candidates by position so downstream logic processes them in order
+  candidates.sort((a, b) => a.index - b.index);
+
+  // STRATEGY A — inline match (the common messy-ticket case)
+  for (const cand of candidates) {
+    const lookbackStart = Math.max(0, cand.index - 300);
+    const before = text.substring(lookbackStart, cand.index);
+    const inline = tryInlineAddressMatch(before);
+    if (!inline) continue;
+    let { line1, line2, city } = inline;
+    if (US_STATES.has(city.toUpperCase()) || /^\d/.test(city) || city.length < 2 || city.length > 40) continue;
+    if (!line2) {
+      const split = splitLine1Line2(line1);
+      if (split.line2) { line1 = split.line1; line2 = split.line2; }
+    }
+    return { line1, line2, city, state: cand.state, zip: cand.zip };
+  }
+
+  // STRATEGY B — line-based walk-back (multi-line address blocks)
+  for (const cand of candidates) {
+    const { state, zip, index } = cand;
+    const lineStart = text.lastIndexOf('\n', index - 1) + 1;
+    const lineEndRaw = text.indexOf('\n', index);
+    const lineEnd = lineEndRaw === -1 ? text.length : lineEndRaw;
+    const fullLine = text.substring(lineStart, lineEnd);
+
+    // Skip date / log-stamp lines (e.g. "04/22/2026 10:15:32")
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(fullLine.trim())) continue;
+
+    let city = null, line1 = null, line2 = '';
+    const beforeState = text.substring(lineStart, index).trim();
+
+    if (beforeState) {
+      const beforeParts = beforeState
+        .split(',')
+        .map(p => p.trim().replace(/[\s\-]+$/, ''))
+        .filter(Boolean);
+
+      // SPECIAL CASE: no commas at all, e.g. "68777 Open Field Dr Montrose".
+      // Split into street + city using the street-suffix keyword as the boundary:
+      // everything up to and including the suffix (and optional direction) is the
+      // street; the remaining trailing words are the city.
+      if (beforeParts.length === 1 && /^\d/.test(beforeParts[0])) {
+        const STREET_SUFFIX = /\b(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Pl|Place|Ter|Terrace|Trl|Trail|Sq|Square|Loop|Run|Pass|Path|Xing|Crossing|Pike|Row|Walk|Bnd|Bend|Cv|Cove|Plaza|Aly|Alley)\b\.?(?:\s+(?:N|S|E|W|NE|NW|SE|SW)\b)?/i;
+        const sm = beforeParts[0].match(STREET_SUFFIX);
+        if (sm) {
+          const cut = sm.index + sm[0].length;
+          const streetPart = beforeParts[0].slice(0, cut).trim();
+          const cityPart = beforeParts[0].slice(cut).trim();
+          if (streetPart && cityPart && !/^\d/.test(cityPart) && cityPart.length >= 2) {
+            line1 = streetPart;
+            city = cityPart;
+          }
+        }
+      }
+
+      // Last comma-segment is city if it looks like a city
+      if (!city && beforeParts.length > 0) {
+        const last = beforeParts[beforeParts.length - 1];
+        if (!/^\d/.test(last) && !US_STATES.has(last.toUpperCase()) && last.length >= 2) {
+          city = last;
+          beforeParts.pop();
+        }
+      }
+
+      // Walk back through remaining parts; first numeric is Line 1, rest is Line 2
+      if (!line1) {
+        const line2Pieces = [];
+        for (let i = beforeParts.length - 1; i >= 0; i--) {
+          const part = beforeParts[i];
+          if (/^\d+\s+/.test(part) || /^P\.?\s*O\.?\s*Box\s+\d+/i.test(part)) {
+            line1 = part;
+            break;
+          } else {
+            line2Pieces.unshift(part);
+          }
+        }
+        if (line2Pieces.length > 0) line2 = line2Pieces.join(', ');
+      }
+    }
+
+    // If we don't yet have Line 1, the street was on a previous line.
+    if (!line1) {
+      const linesBefore = text.substring(0, lineStart).split('\n').map(l => l.trim()).filter(Boolean);
+      const prevLine2 = [];
+      let cityFromPrev = null;
+      for (let i = linesBefore.length - 1; i >= 0 && i >= linesBefore.length - 5; i--) {
+        const c = linesBefore[i];
+        if (!c) continue;
+        if (/^\d+\s+/.test(c) || /^P\.?\s*O\.?\s*Box\s+\d+/i.test(c)) {
+          line1 = c;
+          if (prevLine2.length > 0 && !line2) line2 = prevLine2.reverse().join(', ');
+          if (!city && cityFromPrev) city = cityFromPrev;
+          break;
+        }
+        if (UNIT_PATTERN.test(c) && prevLine2.length < 2) {
+          prevLine2.push(c);
+        } else if (!city && !cityFromPrev && !/^\d/.test(c) && c.length > 1 && c.length < 50 && /^[\w.\s\-']+,?$/.test(c)) {
+          // Possible city on its own line (e.g. "City\nST ZIP" format)
+          cityFromPrev = c.replace(/[,]+$/, '');
+        } else if (prevLine2.length > 0 || cityFromPrev) {
+          break;
+        }
+      }
+    }
+
+    if (!city || /^\d/.test(city) || US_STATES.has(city.toUpperCase()) || city.length < 2) continue;
+    if (!line1 || !/^(\d+|P\.?\s*O\.?)/i.test(line1)) continue;
+
+    // Pull any apt/suite out of Line 1 if we didn't already have Line 2
+    if (!line2) {
+      const split = splitLine1Line2(line1);
+      if (split.line2) { line1 = split.line1; line2 = split.line2; }
+    }
+
+    return { line1, line2, city, state, zip };
+  }
+  return null;
+}
+
+function parseTicket(text) {
+  const result = {
+    ticketNumber: null, callerName: null, callerEmail: null, callerPhone: null,
+    line1: null, line2: null, city: null, state: null, zip: null,
+    company: null, items: [], configurationItem: null,
+    shippingGate: 'unknown', shippingGateReason: null,
+    confidence: {}
+  };
+
+  const tm = text.match(/\b(INC|SCTASK|REQ|RITM)\d{5,}\b/);
+  if (tm) { result.ticketNumber = tm[0]; result.confidence.ticketNumber = 'high'; }
+
+  const isStructured = result.ticketNumber && /^(RITM|SCTASK|REQ)/.test(result.ticketNumber);
+  // Structured-field parser also runs for INC tickets because ServiceNow's INC
+  // header uses the same label-then-value layout for Caller and Phone Number.
+  const structured = parseStructuredFields(text);
+
+  // 1) Name
+  // ===== NEW HIRE RECIPIENT RULE ============================================
+  // For New Hire / Transfer tickets the recipient is the NEW HIRE — never
+  // "Requested for" (that's the HR/admin submitter, e.g. Jenna Thomson).
+  // Resolution order, in priority:
+  //   1. First Name + Last Name              (flavor A)
+  //   2. Requested For First/Last Name        (flavor B)
+  //   3. Name parsed out of the Short description
+  //      ("New Hire Equipment Request for Vincent Wronski- 2026-05-26")
+  // The submitter is recorded separately in result._submitter.
+  const nhFirst = structured['First Name'] || structured['Requested For First Name'] || structured['New Hire First Name'];
+  const nhLast  = structured['Last Name']  || structured['Requested For Last Name']  || structured['New Hire Last Name'];
+  const isNewHire = !!(nhFirst || nhLast ||
+                       /New\s*Hire|New\s*Hire\s*or\s*(?:User\s*)?Transfer|new\s*hire\s*or\s*transfer/i.test(text));
+  result._isNewHire = isNewHire;   // always record it (false for normal tickets), not only on the new-hire branch
+
+  // Pull a name out of the short description for New Hire tickets.
+  const nameFromShortDesc = () => {
+    const sd = structured['Short description'] || '';
+    // "...for Vincent Wronski- 2026-05-26"  OR  "...- Jennifer Cajimat - 2026-05-18"
+    // Strip a trailing date and any trailing dash, then take the name after
+    // "for " or after the last " - " separator.
+    let s = sd.replace(/[-–]\s*\d{4}-\d{2}-\d{2}\s*$/, '').trim();  // drop trailing ISO date
+    s = s.replace(/[-–]\s*$/, '').trim();
+    let m = s.match(/\bfor\s+([A-Z][A-Za-z'’.-]+(?:\s+[A-Z][A-Za-z'’.-]+){1,2})\s*$/);
+    if (!m) m = s.match(/[-–]\s*([A-Z][A-Za-z'’.-]+(?:\s+[A-Z][A-Za-z'’.-]+){1,2})\s*$/);
+    if (m) return m[1].replace(/\s+/g, ' ').trim();
+    return null;
+  };
+
+  if (isNewHire) {
+    result._isNewHire = true;
+    result._submitter = structured['Requested for'] || structured['Requested By'] || null;
+    if (nhFirst || nhLast) {
+      result.callerName = `${(nhFirst||'').trim()} ${(nhLast||'').trim()}`.replace(/\s+/g, ' ').trim();
+      result.confidence.callerName = 'high';
+    } else {
+      const sdName = nameFromShortDesc();
+      if (sdName) {
+        result.callerName = sdName;
+        result.confidence.callerName = 'medium';
+        result._nameFromShortDesc = true;
+      }
+    }
+  } else if (structured['Requested for']) {
+    result.callerName = structured['Requested for'];
+    result.confidence.callerName = 'high';
+  } else if (structured['Caller']) {
+    result.callerName = structured['Caller'];
+    result.confidence.callerName = 'high';
+  } else {
+    const callerColon = text.match(/Caller\s*:\s*([^\n]+)/);
+    if (callerColon) {
+      const v = callerColon[1].trim();
+      if (v && !FIELD_LABELS_GLOBAL.has(v)) {
+        if (v.includes('@')) { result.callerEmail = v; result.confidence.callerEmail = 'high'; }
+        else { result.callerName = v; result.confidence.callerName = 'high'; }
+      }
+    }
+  }
+
+  // 2) Email
+  const emailMatches = [...text.matchAll(/[\w.+\-]+@[\w.\-]+\.\w+/g)].map(m => m[0]);
+  const filteredEmails = emailMatches.filter(e =>
+    !e.includes('service-now') &&
+    !e.toLowerCase().includes('shippinghelp') &&
+    !e.toLowerCase().includes('itservicedesk') &&
+    // Skip booking-link hash emails (Microsoft Bookings URLs have 20+ hex char local parts)
+    !/^[a-f0-9]{20,}@/i.test(e)
+  );
+  if (!result.callerEmail && filteredEmails.length > 0) {
+    if (result.callerName) {
+      const nameTokens = result.callerName.toLowerCase().split(/\s+/);
+      const match = filteredEmails.find(e => {
+        const local = e.split('@')[0].toLowerCase();
+        return nameTokens.some(t => t.length > 2 && local.includes(t));
+      });
+      result.callerEmail = match || filteredEmails[0];
+    } else {
+      result.callerEmail = filteredEmails[0];
+    }
+    result.confidence.callerEmail = 'medium';
+  }
+
+  // Normalize email to lowercase (the label/CSV want a canonical address).
+  if (result.callerEmail) result.callerEmail = result.callerEmail.toLowerCase();
+
+  // 3) Company
+  if (structured['Company']) {
+    result.company = structured['Company'];
+    result.confidence.company = 'high';
+  } else if (result.callerEmail) {
+    const domain = result.callerEmail.split('@')[1]?.toLowerCase();
+    for (const [d, c] of Object.entries(DOMAIN_TO_COMPANY)) {
+      if (domain === d || domain?.endsWith('.' + d)) {
+        result.company = c;
+        result.confidence.company = 'medium';
+        break;
+      }
+    }
+  }
+  // Note: we deliberately do NOT infer company from system/assignment emails —
+  // those are the IT technicians' domains (e.g. the assigned tech's @wellnow.com),
+  // not the recipient's employer. For New Hires with a personal/.edu email and no
+  // Company field, company is left blank for the tech to fill in manually.
+
+  // 4) Phone — handles +1 prefix and the various New Hire phone field names
+  if (structured['Contact number']) {
+    result.callerPhone = normalizePhone(structured['Contact number']);
+    result.confidence.callerPhone = 'high';
+  } else if (structured['Phone Number']) {
+    result.callerPhone = normalizePhone(structured['Phone Number']);
+    result.confidence.callerPhone = 'high';
+  } else if (structured['Cellphone Number']) {
+    result.callerPhone = normalizePhone(structured['Cellphone Number']);
+    result.confidence.callerPhone = 'high';
+  } else if (structured['New Employee Phone Number']) {
+    result.callerPhone = normalizePhone(structured['New Employee Phone Number']);
+    result.confidence.callerPhone = 'high';
+  } else if (structured['Phone number']) {
+    result.callerPhone = normalizePhone(structured['Phone number']);
+    result.confidence.callerPhone = 'high';
+  } else {
+    const phoneRegex = /(\+?1[\s.\-]?)?(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/g;
+    const phoneMatches = [...text.matchAll(phoneRegex)];
+    if (phoneMatches.length > 0) {
+      result.callerPhone = normalizePhone(phoneMatches[0][0]);
+      result.confidence.callerPhone = phoneMatches.length > 1 ? 'medium' : 'high';
+    }
+  }
+
+  // 5) Address — try each candidate source; for each, parse with the comma-aware
+  // parser first, then fall back to the anchor parser (which handles no-comma,
+  // space-only addresses like "68777 Open Field Dr Montrose CO 81401").
+  const applyAddr = (parsed, confidence) => {
+    result.line1 = parsed.line1;
+    result.line2 = parsed.line2 || null;
+    result.city  = parsed.city;
+    result.state = parsed.state;
+    result.zip   = parsed.zip;
+    result.confidence.address = confidence;
+    // ===== ADDRESS-NAME-IS-RECIPIENT RULE ===================================
+    // If the address block carries its own name (e.g. "Alisha Jenkins" above the
+    // street), THAT person is the recipient — the package physically ships to
+    // them, so the FedEx label name must match the destination. The original
+    // "Requested for" person becomes the on-behalf-of requester.
+    if (parsed.careOf) {
+      result._onBehalfOf = result.callerName || null;  // who asked for it
+      result.callerName = parsed.careOf;                // who actually receives it
+      result.confidence.callerName = 'high';
+      result._addressNameRecipient = parsed.careOf;
+    }
+  };
+  const tryAddrSource = (raw, confidence) => {
+    if (!raw || result.line1) return;
+    let parsed = parseAddressLine(raw);
+    if (!parsed) parsed = parseAddressFromText(raw);   // no-comma / messy fallback
+    if (parsed && parsed.line1 && parsed.city && parsed.state && parsed.zip) {
+      applyAddr(parsed, confidence);
+      return;
+    }
+    // PARTIAL address: the structured field exists but isn't fully parseable
+    // (e.g. street only, "1846 N 102nd Pl" with no city/state/zip in the ticket).
+    // Capture the raw street so the tech has a starting point; the completeness
+    // checker will still flag the missing City/State/ZIP.
+    const firstLine = String(raw).split('\n')[0].trim();
+    if (firstLine && /^\d/.test(firstLine)) {
+      result.line1 = firstLine;
+      result.confidence.address = 'low';
+      result._addressPartial = true;
+    }
+  };
+
+  tryAddrSource(structured['Address'], 'high');                  // RITM/SCTASK structured
+  tryAddrSource(structured['Personal address'], 'high');         // New Hire flavor A
+  tryAddrSource(structured['New Employee Home address'], 'high');// New Hire flavor B
+  // Fall back to scanning the whole ticket body (work notes, email signatures).
+  if (!result.line1) {
+    const parsed = parseAddressFromText(text);
+    if (parsed) applyAddr(parsed, 'medium');
+  }
+
+  // 6) Shipping gate
+  //   open    = "Is this being shipped: Yes"  (and every New Hire — they always ship)
+  //   blocked = "Is this being shipped: No"   (no address required)
+  //   none    = no shipping-gate field present at all (typical INC)
+  if (structured['Is this being shipped']) {
+    const v = structured['Is this being shipped'].toLowerCase().trim();
+    if (v === 'no') {
+      result.shippingGate = 'blocked';
+      result.shippingGateReason = 'Ticket flagged "Is this being shipped: No" — do not generate a label.';
+    } else if (v === 'yes') {
+      result.shippingGate = 'open';
+    }
+  } else if (isNewHire) {
+    result.shippingGate = 'open';   // New Hire / Transfer tickets always ship
+  } else {
+    result.shippingGate = 'none';   // no gate field on this ticket
+  }
+
+  // 7) Configuration item / asset / serial — try multiple sources and combine.
+  // Ignores ServiceNow placeholders like "*Computer", "Computer", "Other", "iPad".
+  const isPlaceholderCI = (v) =>
+    !v || /^\*?computer$/i.test(v) || /^(other|ipad|n\/a|none)$/i.test(v) || v.length < 4;
+  const found = [];
+  // 7a) Structured "Configuration item" field (label-then-value layout, e.g. "cms944").
+  // Only accept values that look like an asset tag — a single token containing a
+  // digit — so descriptive categories like "Internet Link" are NOT treated as a CI.
+  const looksLikeTag = (v) => /^[A-Za-z0-9][A-Za-z0-9\-\/]{2,}$/.test(v) && /\d/.test(v);
+  const ciField = structured['Configuration item'];
+  if (ciField) {
+    const v = ciField.trim().replace(/\.$/, '');
+    if (!isPlaceholderCI(v) && looksLikeTag(v)) found.push(v);
+  }
+  // 7b) Inline patterns scanned from the body.
+  const assetPatterns = [
+    /Asset\s*ID\s*#?\s*:?\s*([A-Za-z0-9]+[\-\s]?[A-Za-z0-9]{3,})/i,
+    /\bs\/?n\s*[:#]?\s*([A-Za-z0-9]+\-[A-Za-z0-9]+)/i,
+    /\bserial\s*(?:number|no|#)?\s*[:#]?\s*([A-Za-z0-9]+\-[A-Za-z0-9]+)/i,
+    /(?:Configuration\s*[Ii]tem|\bCI\b)[\s:\-]*([A-Za-z]{2,5}\-[A-Za-z0-9]{4,})/,
+    /#\s*([A-Za-z]{3,5}\-[A-Za-z0-9]{5,})/   // inline device tag, e.g. "#ATGB-LDLC94M5QF"
+  ];
+  for (const pattern of assetPatterns) {
+    const m = text.match(pattern);
+    if (!m) continue;
+    const val = m[1].trim().replace(/\.$/, '');
+    if (isPlaceholderCI(val)) continue;
+    if (!found.includes(val)) found.push(val);
+  }
+  if (found.length > 0) result.configurationItem = found.join(' / ');
+
+  // 8) Items — GENERIC dropdown-driven detection.
+  // Walk EQUIPMENT_FIELD_MAP; any field whose value is approved (not blank/No/0)
+  // produces a label. This is layout-agnostic: standard RITM, New Hire, or any
+  // future variant works as long as the field label is in the map.
+  result.items = [];
+  const addItem = (type, qty) => {
+    if (!type || !ITEM_PRESETS[type]) return;
+    const existing = result.items.find(it => it.type === type);
+    if (existing) existing.qty += (qty || 1);
+    else result.items.push({ type, qty: qty || 1 });
+  };
+
+  if (Object.keys(structured).length > 0) {
+    const consumedLabels = new Set();   // prevents the same field firing twice
+    for (const entry of EQUIPMENT_FIELD_MAP) {
+      // Find the first label in this entry that's present AND not already used
+      let label = null, value = null;
+      for (const l of entry.labels) {
+        if (structured[l] !== undefined && !consumedLabels.has(l)) {
+          label = l; value = structured[l]; break;
+        }
+      }
+      if (label === null) continue;
+      if (!isApproved(value)) { consumedLabels.add(label); continue; }
+
+      if (entry.valueAsType) {
+        const v = String(value).toLowerCase();
+        let matched = null;
+        for (const [needle, type] of Object.entries(entry.typeMap)) {
+          if (v.includes(needle)) { matched = type; break; }
+        }
+        if (matched) addItem(matched, 1);
+      } else if (entry.multi) {
+        entry.multi.forEach(t => addItem(t, 1));
+      } else if (entry.selfQty) {
+        const n = parseInt(value);
+        if (n > 0) addItem(entry.type, n);
+      } else {
+        let qty = 1;
+        if (entry.qtyFrom && structured[entry.qtyFrom] !== undefined) {
+          const n = parseInt(structured[entry.qtyFrom]);
+          if (n > 0) qty = n;
+          consumedLabels.add(entry.qtyFrom);   // the qty field is now used up
+        }
+        addItem(entry.type, qty);
+      }
+      consumedLabels.add(label);
+    }
+  }
+
+  // Fallback: nothing matched via dropdowns → guess from free text / CI
+  // (covers INC tickets that have no equipment form at all).
+  if (result.items.length === 0) {
+    const lowerText = text.toLowerCase();
+    if (/\bipad\b|\btablet\b/.test(lowerText) || result.configurationItem?.toLowerCase().startsWith('atgb')) {
+      result.items.push({ type: 'ipad', qty: 1 });
+    } else if (/thinkpad|laptop|notebook/.test(lowerText) || result.configurationItem?.toLowerCase().startsWith('aglt')) {
+      result.items.push({ type: 'laptop', qty: 1 });
+    } else if (/2\s*monitor|two\s*monitor|dual\s*monitor/.test(lowerText)) {
+      result.items.push({ type: 'monitor', qty: 2 });
+    } else if (/monitor/.test(lowerText)) {
+      result.items.push({ type: 'monitor', qty: 1 });
+    }
+  }
+
+  // 9) Name fallback (signature scan)
+  if (!result.callerName && result.callerEmail) {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    // Dynamically exclude any technician's last name so they don't get misread as the caller
+    const techLastNames = TECHNICIANS.map(t => t.name.split(/\s+/).pop());
+    const techExclude = new RegExp('\\b(' + techLastNames.join('|') + ')\\b');
+    for (const line of lines) {
+      if (/^[A-Z][a-z]+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)?$/.test(line) &&
+          !FIELD_LABELS_GLOBAL.has(line) &&
+          !techExclude.test(line) &&
+          line.length < 40) {
+        result.callerName = line;
+        result.confidence.callerName = 'low';
+        break;
+      }
+    }
+  }
+
+  // Phone fallback: blank / "Teams" / unparseable → use the shared default number
+  // and flag it so the user knows it was auto-filled rather than read from the ticket.
+  if (!result.callerPhone) {
+    result.callerPhone = DEFAULT_PHONE;
+    result._phoneDefaulted = true;
+  }
+
+  // Completeness check — list which required fields are still missing so the
+  // queue/validation can hold the row back. Short labels on purpose.
+  const _reqChecks = [
+    ['callerName', 'name'],
+    ['line1', 'address'],
+    ['city', 'city'],
+    ['state', 'state'],
+    ['zip', 'zip'],
+    ['callerPhone', 'phone'],
+  ];
+  result._missingRequired = _reqChecks.filter(([f]) => !result[f]).map(([, label]) => label);
+
+  return result;
+}
+
+function normalizePhone(raw) {
+  if (!raw) return '';
+  let digits = raw.replace(/\D/g, '');
+  // Strip leading '1' if 11 digits (US country code)
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  return digits;
+}
+
+// =================================================================
+// UI HELPERS
+// =================================================================
+
+const $ = id => document.getElementById(id);
+
+// =================================================================
+// MODE TOGGLE
+// =================================================================
+
+function setMode(mode) {
+  STATE.mode = mode;
+  saveState();
+
+  const outBtn = $('modeOutboundBtn');
+  const retBtn = $('modeReturnBtn');
+
+  if (mode === 'outbound') {
+    outBtn.className = 'mode-btn mode-btn-active';
+    retBtn.className = 'mode-btn mode-btn-inactive';
+    $('senderProfileMode').classList.remove('hidden');
+    $('senderEditMode').classList.add('hidden');
+    $('recipientEditMode').classList.remove('hidden');
+    $('recipientTechMode').classList.add('hidden');
+    $('modeHint').textContent = 'Outbound: ship from Aspen warehouse → remote user (ticket caller).';
+  } else {
+    outBtn.className = 'mode-btn mode-btn-inactive';
+    retBtn.className = 'mode-btn mode-btn-active';
+    $('senderProfileMode').classList.add('hidden');
+    $('senderEditMode').classList.remove('hidden');
+    $('recipientEditMode').classList.add('hidden');
+    $('recipientTechMode').classList.remove('hidden');
+    $('modeHint').textContent = 'Return: ship from remote user (ticket caller) → selected technician at Aspen Chicago PSC3.';
+  }
+  // Re-apply current parse data to whichever block is now visible
+  if (currentParse) applyParseToForm(currentParse);
+  validate();
+}
+
+$('modeOutboundBtn').onclick = () => setMode('outbound');
+$('modeReturnBtn').onclick   = () => setMode('return');
+
+// =================================================================
+// SENDER PROFILES UI (Outbound mode)
+// =================================================================
+
+function renderSenderProfileDropdown() {
+  const sel = $('senderProfile');
+  const builtin = Object.entries(BUILTIN_SENDER_PROFILES);
+  const custom  = Object.entries(STATE.customSenderProfiles);
+  let html = '<optgroup label="Aspen Chicago PSC3 — Technicians">';
+  builtin.forEach(([id, p]) => {
+    const display = p.senderContactName.replace(/^Desktop Support PSC3-/, '');
+    html += `<option value="${id}" ${id === STATE.lastUsedSenderId ? 'selected' : ''}>${display}</option>`;
+  });
+  html += '</optgroup>';
+  if (custom.length) {
+    html += '<optgroup label="Custom profiles">';
+    custom.forEach(([id, p]) => {
+      html += `<option value="${id}" ${id === STATE.lastUsedSenderId ? 'selected' : ''}>${p.label}</option>`;
+    });
+    html += '</optgroup>';
+  }
+  sel.innerHTML = html;
+  const allProfiles = getAllSenderProfiles();
+  if (!allProfiles[STATE.lastUsedSenderId]) {
+    STATE.lastUsedSenderId = 'tech-daniel-yonan';
+    sel.value = STATE.lastUsedSenderId;
+  }
+  renderSenderProfilePreview();
+}
+
+function renderSenderProfilePreview() {
+  const p = getAllSenderProfiles()[$('senderProfile').value];
+  if (!p) { $('senderProfilePreview').textContent = ''; return; }
+  $('senderProfilePreview').innerHTML =
+    `${p.senderContactName} · ${p.senderContactNumber}<br>${p.senderLine1}${p.senderLine2 ? ', ' + p.senderLine2 : ''}, ${p.senderCity} ${p.senderState} ${p.senderPostcode}`;
+}
+
+$('senderProfile').addEventListener('change', () => {
+  STATE.lastUsedSenderId = $('senderProfile').value;
+  saveState();
+  renderSenderProfilePreview();
+  validate();
+});
+
+// =================================================================
+// MANAGE PROFILES MODAL
+// =================================================================
+
+$('manageProfilesBtn').onclick = () => {
+  renderProfilesList();
+  $('profilesModal').style.display = 'flex';
+};
+
+$('closeProfilesModalBtn').onclick = () => {
+  $('profilesModal').style.display = 'none';
+};
+
+function renderProfilesList() {
+  const list = $('profilesList');
+  const profiles = getAllSenderProfiles();
+  list.innerHTML = Object.entries(profiles).map(([id, p]) => `
+    <div class="border border-slate-200 rounded p-3 flex items-start justify-between gap-2">
+      <div class="text-xs">
+        <div class="font-bold text-slate-900">${p.label} ${p._builtin ? '<span class="pill bg-slate-200 text-slate-700">built-in</span>' : ''}</div>
+        <div class="text-slate-600 mono mt-1">${p.senderContactName} · ${p.senderContactNumber}</div>
+        <div class="text-slate-500 mono">${p.senderLine1}${p.senderLine2 ? ', ' + p.senderLine2 : ''}, ${p.senderCity} ${p.senderState} ${p.senderPostcode}</div>
+      </div>
+      ${p._builtin ? '' : `<button data-id="${id}" class="profile-delete text-xs text-rose-600 hover:bg-rose-50 px-2 py-1 rounded">Delete</button>`}
+    </div>
+  `).join('');
+  list.querySelectorAll('.profile-delete').forEach(btn => {
+    btn.onclick = (e) => {
+      const id = e.target.dataset.id;
+      if (confirm(`Delete profile "${STATE.customSenderProfiles[id]?.label}"?`)) {
+        delete STATE.customSenderProfiles[id];
+        if (STATE.lastUsedSenderId === id) STATE.lastUsedSenderId = 'tech-daniel-yonan';
+        saveState();
+        renderProfilesList();
+        renderSenderProfileDropdown();
+      }
+    };
+  });
+}
+
+$('saveNewProfileBtn').onclick = () => {
+  const required = {
+    label: $('newProfileLabel').value.trim(),
+    senderContactName: $('newSenderContactName').value.trim(),
+    senderContactNumber: normalizePhone($('newSenderPhone').value),
+    senderLine1: $('newSenderLine1').value.trim(),
+    senderCity:  $('newSenderCity').value.trim(),
+    senderState: $('newSenderState').value.trim().toUpperCase(),
+    senderPostcode: $('newSenderZip').value.trim()
+  };
+  for (const [k, v] of Object.entries(required)) {
+    if (!v) { alert(`Missing required field: ${k}`); return; }
+  }
+  if (required.senderContactNumber.length !== 10) { alert('Phone must be 10 digits'); return; }
+  if (!/^[A-Z]{2}$/.test(required.senderState))   { alert('State must be 2 letters'); return; }
+
+  const id = required.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (BUILTIN_SENDER_PROFILES[id] || STATE.customSenderProfiles[id]) {
+    if (!confirm(`A profile with id "${id}" already exists — overwrite it?`)) return;
+  }
+  STATE.customSenderProfiles[id] = {
+    ...required,
+    senderCompany: $('newSenderCompany').value.trim() || 'Aspen Dental',
+    senderLine2:   $('newSenderLine2').value.trim(),
+    senderCountry: 'US',
+    senderEmail:   $('newSenderEmail').value.trim()
+  };
+  saveState();
+  ['newProfileLabel','newSenderContactName','newSenderPhone','newSenderLine1','newSenderLine2','newSenderCity','newSenderState','newSenderZip','newSenderEmail'].forEach(id => $(id).value = '');
+  renderProfilesList();
+  renderSenderProfileDropdown();
+};
+
+// =================================================================
+// TECHNICIAN DROPDOWN (Return mode)
+// =================================================================
+
+function renderTechnicianDropdown() {
+  const sel = $('technicianSelect');
+  sel.innerHTML = TECHNICIANS.map(t =>
+    `<option value="${t.id}" ${t.id === STATE.lastUsedTechnicianId ? 'selected' : ''}>${t.name}</option>`
+  ).join('');
+  renderTechAddressPreview();
+}
+
+function renderTechAddressPreview() {
+  const tech = TECHNICIANS.find(t => t.id === $('technicianSelect').value);
+  if (!tech) { $('techAddressPreview').textContent = ''; return; }
+  $('techAddressPreview').innerHTML = `
+    <div><strong>Desktop Support PSC3-${tech.name}</strong></div>
+    <div>${RETURN_ADDRESS.company} · ${RETURN_ADDRESS.phone}</div>
+    <div>${RETURN_ADDRESS.line1}, ${RETURN_ADDRESS.line2}</div>
+    <div>${RETURN_ADDRESS.city}, ${RETURN_ADDRESS.state} ${RETURN_ADDRESS.postcode}</div>
+  `;
+}
+
+$('technicianSelect').addEventListener('change', () => {
+  STATE.lastUsedTechnicianId = $('technicianSelect').value;
+  saveState();
+  renderTechAddressPreview();
+  validate();
+});
+
+// =================================================================
+// ITEMS LIST
+// =================================================================
+
+function renderItemsList() {
+  const container = $('itemsList');
+  if (itemsList.length === 0) {
+    container.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-3 border border-slate-200 rounded">No items yet. Click "+ Add item" or parse a ticket.</div>';
+  } else {
+    container.innerHTML = itemsList.map((it, i) => `
+      <div class="border border-slate-200 rounded p-2 bg-slate-50">
+        <div class="flex items-center gap-2 mb-1">
+          <select data-i="${i}" data-field="type" class="item-input flex-1 border border-slate-300 rounded p-1 text-xs">
+            ${Object.entries(ITEM_PRESETS).map(([k, v]) =>
+              `<option value="${k}" ${k === it.type ? 'selected' : ''}>${v.label}</option>`
+            ).join('')}
+          </select>
+          <label class="text-[11px] text-slate-600">Qty</label>
+          <input data-i="${i}" data-field="qty" type="number" min="1" value="${it.qty}" class="item-input w-14 border border-slate-300 rounded p-1 text-xs mono text-center">
+          <button data-i="${i}" class="item-remove text-rose-500 hover:bg-rose-50 px-2 rounded text-sm">✕</button>
+        </div>
+        <div class="grid grid-cols-4 gap-1">
+          <div><label class="text-[10px] text-slate-500">Wt (lb)</label><input data-i="${i}" data-field="weight" type="number" step="0.1" value="${it.weight}" class="item-input w-full border border-slate-300 rounded p-1 text-xs mono"></div>
+          <div><label class="text-[10px] text-slate-500">L (in)</label><input data-i="${i}" data-field="length" type="number" value="${it.length}" class="item-input w-full border border-slate-300 rounded p-1 text-xs mono"></div>
+          <div><label class="text-[10px] text-slate-500">W (in)</label><input data-i="${i}" data-field="width"  type="number" value="${it.width}"  class="item-input w-full border border-slate-300 rounded p-1 text-xs mono"></div>
+          <div><label class="text-[10px] text-slate-500">H (in)</label><input data-i="${i}" data-field="height" type="number" value="${it.height}" class="item-input w-full border border-slate-300 rounded p-1 text-xs mono"></div>
+        </div>
+      </div>
+    `).join('');
+    container.querySelectorAll('.item-input').forEach(el => {
+      el.addEventListener('input', e => {
+        const i = parseInt(e.target.dataset.i);
+        const f = e.target.dataset.field;
+        const v = e.target.value;
+        if (f === 'type') {
+          itemsList[i].type = v;
+          const p = ITEM_PRESETS[v];
+          if (p) { itemsList[i].weight = p.weight; itemsList[i].length = p.length; itemsList[i].width = p.width; itemsList[i].height = p.height; }
+          renderItemsList();
+        } else if (f === 'qty') {
+          itemsList[i].qty = Math.max(1, parseInt(v) || 1);
+        } else {
+          itemsList[i][f] = parseFloat(v) || 0;
+        }
+        updateItemSummary();
+        validate();
+      });
+    });
+    container.querySelectorAll('.item-remove').forEach(el => {
+      el.addEventListener('click', e => {
+        itemsList.splice(parseInt(e.target.dataset.i), 1);
+        renderItemsList(); updateItemSummary(); validate();
+      });
+    });
+  }
+  updateItemSummary();
+}
+
+function updateItemSummary() {
+  const totalLabels = itemsList.reduce((s, it) => s + (parseInt(it.qty) || 0), 0);
+  const itemCount = itemsList.length;
+  $('itemSummary').textContent = `${itemCount} item type${itemCount === 1 ? '' : 's'} → ${totalLabels} label${totalLabels === 1 ? '' : 's'}`;
+}
+
+function addItem(type = 'custom') {
+  const p = ITEM_PRESETS[type] || ITEM_PRESETS.custom;
+  itemsList.push({ type, qty: 1, weight: p.weight, length: p.length, width: p.width, height: p.height });
+  renderItemsList();
+  validate();
+}
+
+$('addItemBtn').onclick = () => addItem('custom');
+
+// =================================================================
+// PARSE & POPULATE
+// =================================================================
+
+$('loadSample1').onclick = () => { $('ticketText').value = SAMPLE_IPAD; };
+$('loadSample2').onclick = () => { $('ticketText').value = SAMPLE_LAPTOP_RAW; };
+$('loadSample3').onclick = () => { $('ticketText').value = SAMPLE_RITM; };
+$('clearTicket').onclick = () => {
+  $('ticketText').value = '';
+  $('findingsCard').classList.add('hidden');
+  $('parseStatus').textContent = 'No ticket parsed yet.';
+  currentParse = null;
+};
+
+$('parseBtn').onclick = () => {
+  const text = $('ticketText').value;
+  if (!text.trim()) { $('parseStatus').textContent = 'Paste a ticket first.'; return; }
+
+  const r = parseTicket(text);
+  currentParse = r;
+
+  let html = '';
+
+  // ===== COMPLETENESS BANNER =================================================
+  // Explicitly tells the user what's missing and why, so nothing slips through.
+  const REQUIRED_FOR_LABEL = [
+    ['Recipient name', r.callerName,
+      'No Caller / Requested for / First+Last name found. Add it manually.'],
+    ['Phone',          r.callerPhone,
+      'No phone in the ticket (often "Teams" with no number). FedEx Priority Overnight REQUIRES a recipient phone — get one from Teams or use a main office line.'],
+    ['Street',         r.line1,
+      'No street address found. It is usually in a work note or the requester\'s email signature — paste more of the ticket, or type it in.'],
+    ['City',           r.city,
+      'City could not be isolated. Check the address line for a missing comma or unusual format.'],
+    ['State',          r.state,
+      'State not recognized. Confirm it is a valid US state (full names and 2-letter codes both work).'],
+    ['ZIP',            r.zip,
+      'No 5-digit ZIP found near the address. The scanner anchors on the ZIP — without it the address cannot be locked.'],
+    ['Equipment',      r.items.length > 0 ? 'ok' : '',
+      'No equipment detected. For RITM/New Hire tickets check the dropdowns; for INC tickets the device type comes from keywords or the CI/asset tag.']
+  ];
+  const missing = REQUIRED_FOR_LABEL.filter(([, val]) => !val);
+
+  if (r.shippingGate === 'blocked') {
+    html += `<div class="col-span-2 bg-rose-100 border border-rose-400 text-rose-900 p-3 rounded mb-2 font-bold">🚫 ${r.shippingGateReason}</div>`;
+  }
+
+  if (missing.length === 0) {
+    html += `<div class="col-span-2 bg-emerald-50 border border-emerald-400 text-emerald-800 p-2.5 rounded mb-2 text-[12px] font-semibold">✓ All required sections detected — ready to verify and add to batch.</div>`;
+  } else {
+    html += `<div class="col-span-2 bg-amber-50 border border-amber-400 text-amber-900 p-3 rounded mb-2 text-[11px]">
+      <div class="font-bold mb-1">⚠ ${missing.length} section${missing.length === 1 ? '' : 's'} need attention before this label is complete:</div>
+      <ul class="space-y-1 ml-1">
+        ${missing.map(([name, , why]) => `<li><strong>${name}:</strong> ${why}</li>`).join('')}
+      </ul>
+    </div>`;
+  }
+
+  if (r.shippingGate === 'open') {
+    html += `<div class="col-span-2 bg-emerald-50 border border-emerald-300 text-emerald-800 p-2 rounded mb-2 text-[11px]">✓ Shipping gate open — "Is this being shipped: Yes"</div>`;
+  }
+  // [label, value, optional?] — optional fields don't count against the "found N/N" score
+  // and render as "(none)" in gray when missing, instead of "missing" in red.
+  const findings = [
+    ['Ticket #',       r.ticketNumber,       false],
+    ['Company',        r.company,            true],
+    ['Caller',         r.callerName,         false],
+    ['Email',          r.callerEmail,        true],
+    ['Phone',          r.callerPhone,        false],
+    ['Street',         r.line1,              false],
+    ['Line 2 / Suite', r.line2,              true],
+    ['City',           r.city,               false],
+    ['State',          r.state,              false],
+    ['ZIP',            r.zip,                false],
+    ['CI / Asset',     r.configurationItem,  true]
+  ];
+  if (r.confidence.address) {
+    const tone = r.confidence.address === 'high' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-sky-50 border-sky-300 text-sky-800';
+    html += `<div class="col-span-2 ${tone} border p-2 rounded mb-2 text-[11px]">Address confidence: <strong>${r.confidence.address}</strong> — verify before generating CSV.</div>`;
+  }
+  if (r._addressNameRecipient) {
+    html += `<div class="col-span-2 bg-violet-50 border border-violet-300 text-violet-900 p-2 rounded mb-2 text-[11px]">📦 Recipient set from the address: <strong>${r._addressNameRecipient}</strong>. The package ships to this name at the address below${r._onBehalfOf ? `, requested by <strong>${r._onBehalfOf}</strong>` : ''}. The FedEx label uses the address name as the recipient.</div>`;
+  }
+  html += findings.map(([k, v, optional]) => {
+    let display;
+    if (v) {
+      display = `<span class="text-emerald-600">${v}</span>`;
+    } else if (optional) {
+      display = `<span class="text-slate-400">(none)</span>`;
+    } else {
+      display = `<span class="text-rose-500">— missing —</span>`;
+    }
+    return `<div><span class="text-slate-500">${k}:</span> ${display}</div>`;
+  }).join('');
+  html += `<div class="col-span-2 mt-2"><span class="text-slate-500">Equipment:</span> <span class="text-emerald-600">${r.items.map(it => `${ITEM_PRESETS[it.type]?.label || it.type}×${it.qty}`).join(', ') || '<span class="text-rose-500">— none detected —</span>'}</span></div>`;
+  $('findingsList').innerHTML = html;
+  $('findingsCard').classList.remove('hidden');
+
+  applyParseToForm(r);
+
+  const required = findings.filter(([_, __, optional]) => !optional);
+  const found = required.filter(([_, v]) => v).length;
+  $('parseStatus').innerHTML = `Parsed <strong>${found}/${required.length}</strong> required fields, <strong>${r.items.length}</strong> item type${r.items.length === 1 ? '' : 's'} detected.`;
+  validate();
+};
+
+// Populate form fields from a parse result, based on current mode
+function applyParseToForm(r) {
+  if (r.ticketNumber) $('reference').value = r.ticketNumber;
+
+  if (STATE.mode === 'outbound') {
+    // Ticket caller → Recipient
+    if (r.callerName)   $('recipName').value  = r.callerName;
+    if (r.callerPhone)  $('recipPhone').value = r.callerPhone;
+    if (r.line1)        $('recipLine1').value = r.line1;
+    if (r.line2)        $('recipLine2').value = r.line2;
+    if (r.city)         $('recipCity').value  = r.city;
+    if (r.state)        $('recipState').value = r.state;
+    if (r.zip)          $('recipZip').value   = r.zip;
+  } else {
+    // Ticket caller → Sender (they're returning the item)
+    if (r.callerName)   $('senderName').value    = r.callerName;
+    if (r.callerPhone)  $('senderPhone').value   = r.callerPhone;
+    if (r.company)      $('senderCompany').value = r.company;
+    if (r.line1)        $('senderLine1').value   = r.line1;
+    if (r.line2)        $('senderLine2').value   = r.line2;
+    if (r.city)         $('senderCity').value    = r.city;
+    if (r.state)        $('senderState').value   = r.state;
+    if (r.zip)          $('senderZip').value     = r.zip;
+  }
+
+  itemsList = (r.items || []).map(it => {
+    const p = ITEM_PRESETS[it.type] || ITEM_PRESETS.custom;
+    return { type: it.type, qty: it.qty, weight: p.weight, length: p.length, width: p.width, height: p.height };
+  });
+  renderItemsList();
+}
+
+// =================================================================
+// VALIDATION
+// =================================================================
+
+const REQUIRED_FIELDS_OUTBOUND = [
+  ['recipName',  'Recipient name'],
+  ['recipPhone', 'Recipient phone'],
+  ['recipLine1', 'Recipient street'],
+  ['recipCity',  'Recipient city'],
+  ['recipState', 'Recipient state'],
+  ['recipZip',   'Recipient ZIP'],
+  ['reference',  'Reference / Ticket #']
+];
+const REQUIRED_FIELDS_RETURN = [
+  ['senderName',  'Sender name'],
+  ['senderPhone', 'Sender phone'],
+  ['senderLine1', 'Sender street'],
+  ['senderCity',  'Sender city'],
+  ['senderState', 'Sender state'],
+  ['senderZip',   'Sender ZIP'],
+  ['reference',   'Reference / Ticket #']
+];
+
+// Wire live validation to every field that could change
+[
+  'recipName','recipPhone','recipLine1','recipCity','recipState','recipZip','reference',
+  'senderName','senderPhone','senderLine1','senderCity','senderState','senderZip','serviceType'
+].forEach(id => $(id).addEventListener('input', () => { saveServicePref(); validate(); }));
+
+function saveServicePref() {
+  STATE.lastUsedService = $('serviceType').value;
+  saveState();
+}
+
+function validate() {
+  const required = STATE.mode === 'outbound' ? REQUIRED_FIELDS_OUTBOUND : REQUIRED_FIELDS_RETURN;
+  const errors = [];
+  required.forEach(([id, label]) => {
+    const el = $(id);
+    const v = el.value.trim();
+    if (!v) {
+      el.classList.add('field-error'); el.classList.remove('field-ok');
+      errors.push(label + ' missing');
+    } else {
+      el.classList.remove('field-error'); el.classList.add('field-ok');
+    }
+  });
+
+  // Phone digit count
+  const phoneId = STATE.mode === 'outbound' ? 'recipPhone' : 'senderPhone';
+  const phone = $(phoneId).value.replace(/\D/g, '');
+  if (phone && phone.length !== 10) { errors.push('Phone must be 10 digits'); $(phoneId).classList.add('field-error'); }
+
+  // State 2 letters
+  const stateId = STATE.mode === 'outbound' ? 'recipState' : 'senderState';
+  const state = $(stateId).value.trim();
+  if (state && !/^[A-Z]{2}$/.test(state.toUpperCase())) { errors.push('State must be 2 letters'); $(stateId).classList.add('field-error'); }
+
+  // ZIP 5 or 9 digits
+  const zipId = STATE.mode === 'outbound' ? 'recipZip' : 'senderZip';
+  const zip = $(zipId).value.trim();
+  if (zip && !/^\d{5}(-\d{4})?$/.test(zip)) { errors.push('ZIP must be 5 or 9 digits'); $(zipId).classList.add('field-error'); }
+
+  // Items required
+  if (itemsList.length === 0) {
+    errors.push('At least one item required');
+  } else {
+    itemsList.forEach((it, i) => {
+      if (!(it.weight > 0)) errors.push(`Item ${i+1}: weight required`);
+      if (!(it.length > 0 && it.width > 0 && it.height > 0)) errors.push(`Item ${i+1}: dimensions required`);
+      if (!(it.qty >= 1)) errors.push(`Item ${i+1}: qty must be ≥ 1`);
+    });
+  }
+
+  // Dedupe warning (info only, not error)
+  const ref = $('reference').value.trim();
+  const dupeCount = ref ? STATE.queue.filter(q => q.reference?.startsWith(ref)).length : 0;
+
+  const totalLabels = itemsList.reduce((s, it) => s + (parseInt(it.qty) || 0), 0);
+  const box = $('validationBox');
+
+  if (currentParse && currentParse.shippingGate === 'blocked') {
+    box.className = 'mt-4 p-3 rounded text-xs border bg-rose-100 border-rose-400 text-rose-900 font-bold';
+    box.textContent = '🚫 ' + currentParse.shippingGateReason;
+    box.classList.remove('hidden');
+    $('addToBatchBtn').disabled = true;
+    return;
+  }
+
+  if (errors.length === 0) {
+    let msg = `✓ Ready — will create <strong>${totalLabels}</strong> label${totalLabels === 1 ? '' : 's'} in the batch`;
+    if (dupeCount > 0) {
+      msg += ` <span class="text-amber-700">· ⚠ ${dupeCount} existing shipment${dupeCount === 1 ? '' : 's'} already use this reference</span>`;
+    }
+    box.className = 'mt-4 p-3 rounded text-xs border bg-emerald-50 border-emerald-300 text-emerald-800';
+    box.innerHTML = msg;
+    box.classList.remove('hidden');
+    $('addToBatchBtn').disabled = false;
+  } else {
+    box.className = 'mt-4 p-3 rounded text-xs border bg-rose-50 border-rose-300 text-rose-800';
+    box.innerHTML = `<strong>${errors.length} issue${errors.length === 1 ? '' : 's'}:</strong> ${errors.join(' · ')}`;
+    box.classList.remove('hidden');
+    $('addToBatchBtn').disabled = true;
+  }
+}
+
+// =================================================================
+// ADD TO BATCH
+// =================================================================
+
+$('addToBatchBtn').onclick = () => {
+  const baseRef = $('reference').value.trim();
+  const totalLabels = itemsList.reduce((s, it) => s + (parseInt(it.qty) || 0), 0);
+
+  // Determine sender + recipient based on mode
+  let senderData, recipientData;
+  if (STATE.mode === 'outbound') {
+    const profile = getAllSenderProfiles()[$('senderProfile').value];
+    senderData = {
+      senderContactName:   profile.senderContactName,
+      senderCompany:       profile.senderCompany,
+      senderContactNumber: profile.senderContactNumber,
+      senderLine1:         profile.senderLine1,
+      senderLine2:         profile.senderLine2,
+      senderCity:          profile.senderCity,
+      senderState:         profile.senderState,
+      senderPostcode:      profile.senderPostcode,
+      senderCountry:       profile.senderCountry,
+      senderEmail:         profile.senderEmail
+    };
+    recipientData = {
+      recipientContactName:   $('recipName').value.trim(),
+      recipientContactNumber: $('recipPhone').value.replace(/\D/g, ''),
+      recipientLine1:         $('recipLine1').value.trim(),
+      recipientLine2:         $('recipLine2').value.trim(),
+      recipientCity:          $('recipCity').value.trim(),
+      recipientState:         $('recipState').value.trim().toUpperCase(),
+      recipientPostcode:      $('recipZip').value.trim(),
+      recipientCountry:       'US'
+    };
+  } else {
+    const tech = TECHNICIANS.find(t => t.id === $('technicianSelect').value);
+    senderData = {
+      senderContactName:   $('senderName').value.trim(),
+      senderCompany:       $('senderCompany').value.trim() || '',
+      senderContactNumber: $('senderPhone').value.replace(/\D/g, ''),
+      senderLine1:         $('senderLine1').value.trim(),
+      senderLine2:         $('senderLine2').value.trim(),
+      senderCity:          $('senderCity').value.trim(),
+      senderState:         $('senderState').value.trim().toUpperCase(),
+      senderPostcode:      $('senderZip').value.trim(),
+      senderCountry:       'US',
+      senderEmail:         ''
+    };
+    recipientData = {
+      recipientContactName:   `Desktop Support PSC3-${tech.name}`,
+      recipientContactNumber: RETURN_ADDRESS.phone,
+      recipientLine1:         RETURN_ADDRESS.line1,
+      recipientLine2:         RETURN_ADDRESS.line2,
+      recipientCity:          RETURN_ADDRESS.city,
+      recipientState:         RETURN_ADDRESS.state,
+      recipientPostcode:      RETURN_ADDRESS.postcode,
+      recipientCountry:       RETURN_ADDRESS.country
+    };
+  }
+
+  let labelIdx = 0;
+  itemsList.forEach(it => {
+    const itemLabel = ITEM_PRESETS[it.type]?.label || it.type;
+    for (let i = 0; i < it.qty; i++) {
+      labelIdx++;
+      const ref = totalLabels === 1 ? baseRef : `${baseRef}-${labelIdx}`;
+      STATE.queue.push({
+        reference:    ref,
+        serviceType:  $('serviceType').value,
+        shipmentType: STATE.mode === 'outbound' ? 'OUTBOUND' : 'RETURN',
+        ...senderData,
+        ...recipientData,
+        numberOfPackages: 1,
+        packageWeight:    parseFloat(it.weight),
+        weightUnits:      'LBS',
+        length:           parseInt(it.length),
+        width:            parseInt(it.width),
+        height:           parseInt(it.height),
+        packageType:      'YOUR_PACKAGING',
+        currencyType:     'USD',
+        _itemLabel:       itemLabel,
+        _mode:            STATE.mode,
+        _ci:              currentParse?.configurationItem || ''
+      });
+    }
+  });
+  saveState();
+  renderQueue();
+
+  // Capture context BEFORE the soft reset, so we can offer a return label
+  // that mirrors the customer info from this outbound.
+  let outboundContextForReturn = null;
+  if (STATE.mode === 'outbound') {
+    outboundContextForReturn = {
+      ref:         baseRef,
+      serviceType: $('serviceType').value,
+      recipient:   { ...recipientData },
+      items:       JSON.parse(JSON.stringify(itemsList)),
+      ci:          currentParse?.configurationItem || ''
+    };
+  }
+
+  // Soft reset
+  $('ticketText').value = '';
+  $('findingsCard').classList.add('hidden');
+  $('parseStatus').textContent = `Added ${totalLabels} shipment${totalLabels === 1 ? '' : 's'} to batch. Paste the next ticket.`;
+  [
+    'recipName','recipPhone','recipLine1','recipLine2','recipCity','recipState','recipZip',
+    'senderName','senderPhone','senderCompany','senderLine1','senderLine2','senderCity','senderState','senderZip',
+    'reference'
+  ].forEach(id => { $(id).value = ''; $(id).classList.remove('field-ok','field-error'); });
+  itemsList = [];
+  currentParse = null;
+  renderItemsList();
+  $('validationBox').classList.add('hidden');
+  $('addToBatchBtn').disabled = true;
+
+  // Trigger the return prompt after the form has reset
+  if (outboundContextForReturn && askForReturnLabelThisSession) {
+    showReturnPrompt(outboundContextForReturn);
+  }
+};
+
+// =================================================================
+// RETURN-LABEL PROMPT (post-outbound)
+// =================================================================
+
+let askForReturnLabelThisSession = true;
+let pendingReturnContext = null;
+
+function showReturnPrompt(ctx) {
+  pendingReturnContext = ctx;
+
+  $('returnPromptSummary').innerHTML = `
+    <div class="text-slate-700">Outbound just added: <strong class="mono">${ctx.ref}</strong></div>
+    <div class="text-slate-600 mt-1"><strong>${ctx.recipient.recipientContactName}</strong></div>
+    <div class="text-slate-500">${ctx.recipient.recipientLine1}${ctx.recipient.recipientLine2 ? ', ' + ctx.recipient.recipientLine2 : ''}, ${ctx.recipient.recipientCity}, ${ctx.recipient.recipientState} ${ctx.recipient.recipientPostcode}</div>
+    <div class="text-slate-500 mt-2 text-[10px]">↩ Return shipment would ship from this address back to the selected technician at Aspen Chicago PSC3.</div>
+  `;
+
+  // Technician dropdown (defaults to last used)
+  $('returnPromptTechnician').innerHTML = TECHNICIANS.map(t =>
+    `<option value="${t.id}" ${t.id === STATE.lastUsedTechnicianId ? 'selected' : ''}>${t.name}</option>`
+  ).join('');
+
+  // Items checkboxes — defaults to all checked, matching outbound
+  $('returnPromptItems').innerHTML = ctx.items.map((it, i) => {
+    const label = ITEM_PRESETS[it.type]?.label || it.type;
+    return `
+      <label class="flex items-center gap-2 text-xs bg-slate-50 border border-slate-200 rounded p-2 cursor-pointer hover:bg-slate-100">
+        <input type="checkbox" data-i="${i}" class="return-item-check" checked>
+        <span class="flex-1">${label} × ${it.qty}</span>
+        <span class="text-slate-400 mono text-[10px]">${it.weight}lb · ${it.length}×${it.width}×${it.height}</span>
+      </label>
+    `;
+  }).join('');
+
+  $('returnPromptDontAskAgain').checked = false;
+  $('returnPromptSameRef').checked = true;
+  $('returnPromptModal').style.display = 'flex';
+}
+
+function closeReturnPrompt() {
+  if ($('returnPromptDontAskAgain').checked) askForReturnLabelThisSession = false;
+  $('returnPromptModal').style.display = 'none';
+  pendingReturnContext = null;
+}
+
+$('returnPromptSkipBtn').onclick = closeReturnPrompt;
+
+$('returnPromptAddBtn').onclick = () => {
+  if (!pendingReturnContext) { closeReturnPrompt(); return; }
+  const ctx = pendingReturnContext;
+
+  const techId = $('returnPromptTechnician').value;
+  const tech = TECHNICIANS.find(t => t.id === techId);
+  STATE.lastUsedTechnicianId = techId;
+
+  const useSameRef = $('returnPromptSameRef').checked;
+
+  // Collect selected items
+  const selected = [];
+  $('returnPromptItems').querySelectorAll('.return-item-check').forEach(cb => {
+    if (cb.checked) selected.push(ctx.items[parseInt(cb.dataset.i)]);
+  });
+  if (selected.length === 0) {
+    alert('Pick at least one item for the return — or click Skip if no return is needed.');
+    return;
+  }
+
+  // Sender = the outbound recipient (the customer). Recipient = chosen technician.
+  const senderData = {
+    senderContactName:   ctx.recipient.recipientContactName,
+    senderCompany:       '',
+    senderContactNumber: ctx.recipient.recipientContactNumber,
+    senderLine1:         ctx.recipient.recipientLine1,
+    senderLine2:         ctx.recipient.recipientLine2,
+    senderCity:          ctx.recipient.recipientCity,
+    senderState:         ctx.recipient.recipientState,
+    senderPostcode:      ctx.recipient.recipientPostcode,
+    senderCountry:       'US',
+    senderEmail:         ''
+  };
+  const recipientData = {
+    recipientContactName:   `Desktop Support PSC3-${tech.name}`,
+    recipientContactNumber: RETURN_ADDRESS.phone,
+    recipientLine1:         RETURN_ADDRESS.line1,
+    recipientLine2:         RETURN_ADDRESS.line2,
+    recipientCity:          RETURN_ADDRESS.city,
+    recipientState:         RETURN_ADDRESS.state,
+    recipientPostcode:      RETURN_ADDRESS.postcode,
+    recipientCountry:       RETURN_ADDRESS.country
+  };
+
+  const totalReturnLabels = selected.reduce((s, it) => s + (parseInt(it.qty) || 0), 0);
+  let labelIdx = 0;
+  selected.forEach(it => {
+    const itemLabel = ITEM_PRESETS[it.type]?.label || it.type;
+    for (let i = 0; i < it.qty; i++) {
+      labelIdx++;
+      let ref;
+      if (useSameRef) {
+        ref = totalReturnLabels === 1 ? `${ctx.ref}-RTN` : `${ctx.ref}-RTN${labelIdx}`;
+      } else {
+        ref = totalReturnLabels === 1 ? `RTN-${ctx.ref}` : `RTN-${ctx.ref}-${labelIdx}`;
+      }
+      STATE.queue.push({
+        reference:    ref,
+        serviceType:  ctx.serviceType,
+        shipmentType: 'RETURN',
+        ...senderData,
+        ...recipientData,
+        numberOfPackages: 1,
+        packageWeight:    parseFloat(it.weight),
+        weightUnits:      'LBS',
+        length:           parseInt(it.length),
+        width:            parseInt(it.width),
+        height:           parseInt(it.height),
+        packageType:      'YOUR_PACKAGING',
+        currencyType:     'USD',
+        _itemLabel:       itemLabel,
+        _mode:            'return',
+        _pairedWith:      ctx.ref,
+        _ci:              ctx.ci || ''
+      });
+    }
+  });
+
+  saveState();
+  renderQueue();
+  closeReturnPrompt();
+
+  $('parseStatus').innerHTML = `<span class="text-emerald-700 font-semibold">✓ Outbound + ${totalReturnLabels} return label${totalReturnLabels === 1 ? '' : 's'} added.</span> Paste the next ticket.`;
+};
+
+// =================================================================
+// QUEUE
+// =================================================================
+
+function renderQueue() {
+  $('queueCount').textContent = STATE.queue.length;
+  $('generateCsvBtn').disabled = STATE.queue.length === 0;
+  $('clearQueueBtn').classList.toggle('hidden', STATE.queue.length === 0);
+
+  if (STATE.queue.length === 0) {
+    $('queueTable').innerHTML = '<div class="text-slate-400 italic text-center py-8">No shipments queued.</div>';
+    return;
+  }
+
+  // Stats for tracking
+  const outCount = STATE.queue.filter(r => r.shipmentType === 'OUTBOUND').length;
+  const retCount = STATE.queue.filter(r => r.shipmentType === 'RETURN').length;
+  const uniqueTickets = new Set(STATE.queue.map(r => (r.reference || '').replace(/-RTN\d*$|^RTN-/, '').replace(/-\d+$/, ''))).size;
+  const totalWeight = STATE.queue.reduce((s, r) => s + (parseFloat(r.packageWeight) || 0), 0);
+
+  $('queueTable').innerHTML = `
+    <div class="mb-2 flex flex-wrap items-center gap-3 text-[11px] mono">
+      <span class="pill bg-sky-100 text-sky-800">📦 ${outCount} outbound</span>
+      <span class="pill bg-amber-100 text-amber-800">↩ ${retCount} return</span>
+      <span class="pill bg-slate-100 text-slate-700">${uniqueTickets} ticket${uniqueTickets === 1 ? '' : 's'}</span>
+      <span class="pill bg-slate-100 text-slate-700">${totalWeight.toFixed(1)} lb total</span>
+    </div>
+    <table class="w-full">
+      <thead class="bg-slate-100 mono">
+        <tr>
+          <th class="text-left p-2">#</th>
+          <th class="text-left p-2">Type</th>
+          <th class="text-left p-2">Ref</th>
+          <th class="text-left p-2">Item</th>
+          <th class="text-left p-2">CI / Asset</th>
+          <th class="text-left p-2">From</th>
+          <th class="text-left p-2">To</th>
+          <th class="text-left p-2">Service</th>
+          <th class="text-left p-2">Pkg</th>
+          <th class="p-2"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${STATE.queue.map((r, i) => `
+          <tr class="border-t border-slate-200 ${r.shipmentType === 'RETURN' ? 'bg-amber-50/40' : ''}">
+            <td class="p-2 mono">${i+1}</td>
+            <td class="p-2"><span class="pill ${r.shipmentType === 'RETURN' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}">${r.shipmentType === 'RETURN' ? '↩ RET' : '📦 OUT'}</span></td>
+            <td class

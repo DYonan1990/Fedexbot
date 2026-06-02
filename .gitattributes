@@ -1,0 +1,23 @@
+# Normalize line endings across machines.
+# Store text as LF in the repo and check it out as LF everywhere, so editing on
+# Windows doesn't produce noisy LF<->CRLF diffs. This stops GitHub Desktop's
+# "change in line endings from 'LF' to 'CRLF'" warning.
+* text=auto eol=lf
+
+# Explicit text types (belt-and-suspenders)
+*.html  text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.css   text eol=lf
+
+# Binary files — never convert
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pdf   binary
+*.ico   binary
+*.zip   binary

@@ -1,0 +1,21 @@
+name: regression
+
+# Robot reviewer: re-runs the golden regression suite on every push and PR.
+# A red X here means a change broke a pinned ticket — it must be fixed before
+# the change is trusted. This is what keeps the parser from silently regressing.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run regression suite
+        run: npm test

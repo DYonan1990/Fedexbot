@@ -1,0 +1,1035 @@
+{
+  "description": "Golden regression dataset for the Aspen Dental FedEx shipping bot parser. Each entry contains the raw ServiceNow ticket text and the EXACT expected parse output. The Cowork regression test should run parseTicket(raw) and assert the result matches expected for every ticket. This pins correct behavior independent of any single code version, so a refactor cannot silently change parsing.",
+  "version": "1.0",
+  "generated": "2026-06-01",
+  "field_notes": {
+    "callerName": "The recipient — who the FedEx label is addressed to.",
+    "_onBehalfOf": "Set when the recipient differs from the requester (care-of address name, or New Hire submitter). null otherwise.",
+    "_isNewHire": "true for New Hire / Transfer tickets.",
+    "_submitter": "The HR/admin who filed a New Hire ticket (not the recipient).",
+    "_addressNameRecipient": "Set when a name on the Address block became the recipient.",
+    "_addressPartial": "true when only a partial address (e.g. street only) could be parsed.",
+    "shippingGate": "'open' = Yes, 'blocked' = 'Is this being shipped: No', 'none' = no gate field present (typical INC).",
+    "items": "Array of {type, qty}. Empty array = no shippable hardware (e.g. software request).",
+    "configurationItem": "Combined CI / asset identifiers, '/'-joined when multiple."
+  },
+  "tickets": [
+    {
+      "id": "INC2231755",
+      "label": "April Walsh — laptop not charging",
+      "format": "INC",
+      "covers": [
+        "INC label-then-value layout (Caller / Phone Number)",
+        "trailing period after state (AZ.)",
+        "sn: + Asset ID combined",
+        "booking-link hash email filtered out",
+        "address in work note",
+        "*Computer placeholder ignored"
+      ],
+      "raw": "Incident\nINC2231755\nNumber\nINC2231755\nCaller\nApril Walsh\nPhone Number\n520-907-8985\nOffice Direct Extension\n7240571\nCategory\nHardware\nSubcategory\nLaptop\nLocation\n3314 - Chandler, AZ\nConfiguration item\n*Computer\nShort description\nLaptop not charging\nDescription\nLaptop not charging\nUnable to obtain PC name\nsn: gm-06eh0t\nAsset ID #: ADMI-24744\nDY\nDaniel Yonan\nWork notes • 05/27/2026 14:48:40\nApril Walsh\n2511 W Queen Creek Rd. Unit 177\nChandler, AZ. 85248\nDY\nDaniel Yonan\nAdditional comments • 05/27/2026 14:45:53\nHi April, book a time:\nhttps://outlook.office.com/bookwithme/user/320458bee9f149d29c13507d7cedf7f8@teamtag.com?anonymous&ismsaljsauthenabled&ep=plink\nDaniel Yonan\nSystem Email sent To:awalsh@aspendental.com",
+      "expected": {
+        "ticketNumber": "INC2231755",
+        "callerName": "April Walsh",
+        "_isNewHire": false,
+        "callerPhone": "5209078985",
+        "callerEmail": "awalsh@aspendental.com",
+        "company": "Aspen",
+        "line1": "2511 W Queen Creek Rd.",
+        "line2": "Unit 177",
+        "city": "Chandler",
+        "state": "AZ",
+        "zip": "85248",
+        "configurationItem": "ADMI-24744 / gm-06eh0t",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "INC2185336",
+      "label": "Kenneth Charette — laptop replacement",
+      "format": "INC",
+      "covers": [
+        "spelled-out state (Utah → UT)",
+        "phone with 'Teams /' prefix",
+        "#unit in address",
+        "ClearChoice domain",
+        "address in work note"
+      ],
+      "raw": "Incident\nINC2185336\nCaller\nKenneth Charette\nPhone Number\nTeams / 7025269779\nCategory\nHardware\nSubcategory\nDesktop\nConfiguration item\ncms944\nShort description\nCC WFM Administrator - Request to replace older Remote Laptop\nCM\nChristopher Malara\nWork notes•04/21/2026 13:58:11\nKenneth Charette\n\n1385 E Cobble Creek Rd, #17A, Murray, Utah 84117\nSystem Email sent To:kcharette@clearchoice.com",
+      "expected": {
+        "ticketNumber": "INC2185336",
+        "callerName": "Kenneth Charette",
+        "_isNewHire": false,
+        "callerPhone": "7025269779",
+        "callerEmail": "kcharette@clearchoice.com",
+        "company": "ClearChoice",
+        "line1": "1385 E Cobble Creek Rd",
+        "line2": "#17A",
+        "city": "Murray",
+        "state": "UT",
+        "zip": "84117",
+        "configurationItem": "cms944",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "INC2183113",
+      "label": "Tammy Sheedy — iPad lost connection",
+      "format": "INC",
+      "covers": [
+        "iPad detected via ATGB- CI prefix",
+        "address in email signature",
+        "Lovet domain",
+        "phone in signature with parens/dashes"
+      ],
+      "raw": "Incident\nINC2183113\nCaller\nTammy Sheedy\nPhone Number\n6029382707\nConfiguration item\nInternet Link\nShort description\nIpad not connecting to internet\nDescription\nI pad has lost connection to the internet #ATGB-LDLC94M5QF\nTS\nTammy Sheedy\nAdditional comments\nreply from: tammy.sheedy@lovet.com\n5130 W Thunderbird Rd\nGlendale, AZ 85306\n602-938-2707\nTammy Sheedy\nHospital Manager\nLovet Pet Health Care | Arrow\nP: (602) 938-2707 | F: (602) 938-2934",
+      "expected": {
+        "ticketNumber": "INC2183113",
+        "callerName": "Tammy Sheedy",
+        "_isNewHire": false,
+        "callerPhone": "6029382707",
+        "callerEmail": "tammy.sheedy@lovet.com",
+        "company": "Lovet",
+        "line1": "5130 W Thunderbird Rd",
+        "line2": null,
+        "city": "Glendale",
+        "state": "AZ",
+        "zip": "85306",
+        "configurationItem": "ATGB-LDLC94M5QF",
+        "items": [
+          {
+            "type": "ipad",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "INC2192773",
+      "label": "Zach Craig — TPM error new laptop",
+      "format": "INC",
+      "covers": [
+        "phone GENUINELY MISSING (value is 'Teams')",
+        "Ln. street abbreviation",
+        "#unit",
+        "address in work note",
+        "phone GENUINELY MISSING -> falls back to DEFAULT_PHONE (3154546000), flagged _phoneDefaulted"
+      ],
+      "raw": "Incident\nINC2192773\nCaller\nZach Craig\nPhone Number\nTeams\nConfiguration item\ncclt-6g87sb4\nShort description\nTPM error on new laptop\nDY\nDaniel Yonan\nWork notes • 04/29/2026 15:03:33\n10290 W 55th Ln. #105\nArvada, CO 80002\nuser getting a 14inch clearchoice dell\nSystem Email sent To:zach.craig@teamtag.com",
+      "expected": {
+        "ticketNumber": "INC2192773",
+        "callerName": "Zach Craig",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "callerEmail": "zach.craig@teamtag.com",
+        "company": "TAG",
+        "line1": "10290 W 55th Ln.",
+        "line2": "#105",
+        "city": "Arvada",
+        "state": "CO",
+        "zip": "80002",
+        "configurationItem": "cclt-6g87sb4",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none",
+        "_phoneDefaulted": true
+      }
+    },
+    {
+      "id": "INC2197793",
+      "label": "Kaleana Bradburn — Windows license expiring",
+      "format": "INC",
+      "covers": [
+        "inline 'Phone:' and 'Address:' labels in a work note",
+        "no-comma space-only address (68777 Open Field Dr Montrose CO 81401)",
+        "software/license issue → no hardware item"
+      ],
+      "raw": "Incident\nINC2197793\nCaller\nKaleana Bradburn\nPhone Number\nTeams is best\nConfiguration item\nOther\nShort description\nWindows License Will Expire Soon\nDY\nDaniel Yonan\nWork notes•05/05/2026 10:32:59\nPhone: 757-754-1304\nAddress: 68777 Open Field Dr Montrose CO 81401\nSystem Email sent To:kbradburn@clearchoice.com",
+      "expected": {
+        "ticketNumber": "INC2197793",
+        "callerName": "Kaleana Bradburn",
+        "_isNewHire": false,
+        "callerPhone": "7577541304",
+        "callerEmail": "kbradburn@clearchoice.com",
+        "company": "ClearChoice",
+        "line1": "68777 Open Field Dr",
+        "line2": null,
+        "city": "Montrose",
+        "state": "CO",
+        "zip": "81401",
+        "configurationItem": null,
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "INC2186216",
+      "label": "Nicole Didenko — iPads need update",
+      "format": "INC",
+      "covers": [
+        "iPad via CI",
+        "'Our address is' preamble line",
+        "contact name+number in signature",
+        "KNOWN GAP: 'all three ipads' free text does not set qty=3 (parser yields 1)"
+      ],
+      "raw": "Incident\nINC2186216\nCaller\nNicole Didenko\nPhone Number\n8643476063\nConfiguration item\niPad\nShort description\nIpads need update\nDescription\nall our ipads need the new IOS update, this is with all three ipads\nND\nNicole Didenko\nAdditional comments\nOur address is\n1283 Lincoln Hwy\nLevittown PA 19056\nBest contact can be me:\nNicole Didenko 864-347-6063\nSystem Email sent To:nicole.didenko@aspendental.com",
+      "expected": {
+        "ticketNumber": "INC2186216",
+        "callerName": "Nicole Didenko",
+        "_isNewHire": false,
+        "callerPhone": "8643476063",
+        "callerEmail": "nicole.didenko@aspendental.com",
+        "company": "Aspen",
+        "line1": "1283 Lincoln Hwy",
+        "line2": null,
+        "city": "Levittown",
+        "state": "PA",
+        "zip": "19056",
+        "configurationItem": null,
+        "items": [
+          {
+            "type": "ipad",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "RITM1936266",
+      "label": "Alyssa Latanision — standard user equipment",
+      "format": "RITM-standard",
+      "covers": [
+        "standard 'Do you need a X' Yes/No fields",
+        "2 monitors via Number of monitors",
+        "full kit",
+        "structured Address with Apt line",
+        "monitor double-count guard (must be 2 not 4)",
+        "TAG company"
+      ],
+      "raw": "Requested Item\nRITM1936266\nRequested for\nAlyssa Latanision\n Company\nTAG\n Location/Facility – Ship to:\n0003 - PSC 3 - Chicago\n Is this being shipped\nYes\n Address\n1005 W George St \nApt 3F\nChicago IL 60657\n Contact number\n9524562287\n Do you need a monitor\nYes\n Number of monitors\n2\n Do you need a keyboard\nYes\n Do you need a mouse\nYes\n Do you need a webcam\nNo\n Do you need a headset\nYes\nDo you need a docking station\nYes",
+      "expected": {
+        "ticketNumber": "RITM1936266",
+        "callerName": "Alyssa Latanision",
+        "_isNewHire": false,
+        "callerPhone": "9524562287",
+        "company": "TAG",
+        "line1": "1005 W George St",
+        "line2": "Apt 3F",
+        "city": "Chicago",
+        "state": "IL",
+        "zip": "60657",
+        "items": [
+          {
+            "type": "monitor",
+            "qty": 2
+          },
+          {
+            "type": "keyboard",
+            "qty": 1
+          },
+          {
+            "type": "mouse",
+            "qty": 1
+          },
+          {
+            "type": "headset",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1954957",
+      "label": "Dakotah Ciciarelli — laptop",
+      "format": "RITM-standard",
+      "covers": [
+        "'Apartment' word unit line",
+        "+1 phone prefix",
+        "country line after address (United States of America)",
+        "Computer Type laptop"
+      ],
+      "raw": "Requested Item\nRITM1954957\nRequested for\nDakotah Ciciarelli\n Company\nTAG\n Is this being shipped\nYes\n Address\n616 Cassell Drive\nApartment 302\nFayetteville, NC 28311\nUnited States of America\n Contact number\n+1 315-882-5046\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nStandard",
+      "expected": {
+        "ticketNumber": "RITM1954957",
+        "callerName": "Dakotah Ciciarelli",
+        "_isNewHire": false,
+        "callerPhone": "3158825046",
+        "company": "TAG",
+        "line1": "616 Cassell Drive",
+        "line2": "Apartment 302",
+        "city": "Fayetteville",
+        "state": "NC",
+        "zip": "28311",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1996939",
+      "label": "Aaron Hairston — dock + keyboard replacement",
+      "format": "RITM-standard",
+      "covers": [
+        "dotted phone (680.895.0508)",
+        "'-- None --' equipment values skipped",
+        "Wireless keyboard type (non-Yes value still ships)",
+        "ship=No gate blocked"
+      ],
+      "raw": "Requested Item\nRITM1996939\nRequested for\nAaron Hairston\n Company\nTAG\n Location/Facility – Ship to:\n0002 - PSC 2 - Weighlock\n Is this being shipped\nNo\n Contact number\n680.895.0508\nAdditional information\nDocking station is failing. will need a replacement\n Do you need a monitor\n-- None --\n Do you need a keyboard\nYes\n Keyboard type\nWireless\n Do you need a mouse\n-- None --\n Do you need a webcam\n-- None --\nDo you need a headset\n-- None --\nDo you need a docking station\nYes\nSystem Email sent To:aaron.hairston@teamtag.com",
+      "expected": {
+        "ticketNumber": "RITM1996939",
+        "callerName": "Aaron Hairston",
+        "_isNewHire": false,
+        "callerPhone": "6808950508",
+        "callerEmail": "aaron.hairston@teamtag.com",
+        "company": "TAG",
+        "items": [
+          {
+            "type": "keyboard",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "blocked"
+      }
+    },
+    {
+      "id": "RITM1990359",
+      "label": "Kristen Turney — replacement laptop",
+      "format": "RITM-standard",
+      "covers": [
+        "2-line address with no comma on city line (Peletier NC 28584)",
+        "Aspen company",
+        "keypad request in free text (no extra item)"
+      ],
+      "raw": "Requested Item\nRITM1990359\nRequested for\nKristen Turney\n Company\nAspen\n Location/Facility – Ship to:\n0889 Division Director Implant Support\n Is this being shipped\nYes\n Address\n311 Silver Creek Landing \nPeletier NC 28584\n Contact number\n2522418124\nAdditional information\nCurrent laptop continues to freeze. Need a replacement laptop and would like to have a keypad on keyboard\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nStandard\nSystem Email sent To:kristen.turney@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1990359",
+        "callerName": "Kristen Turney",
+        "_isNewHire": false,
+        "callerPhone": "2522418124",
+        "callerEmail": "kristen.turney@aspendental.com",
+        "company": "Aspen",
+        "line1": "311 Silver Creek Landing",
+        "line2": null,
+        "city": "Peletier",
+        "state": "NC",
+        "zip": "28584",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1888327",
+      "label": "Jason Crans — MacBook Air 15",
+      "format": "RITM-standard",
+      "covers": [
+        "Mac / MacBook → laptop type",
+        "ship=No gate blocked",
+        "no Address (ship=No so not required)"
+      ],
+      "raw": "Requested Item\nRITM1888327\nRequested for\nJason Crans\n Company\nTAG\n Location/Facility – Ship to:\n0002 - PSC 2 - Weighlock\n Is this being shipped\nNo\n Contact number\n3159207115\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nMac\n Please select Mac model\nMacBook Air 15\nSystem Email sent To:jason.crans@teamtag.com",
+      "expected": {
+        "ticketNumber": "RITM1888327",
+        "callerName": "Jason Crans",
+        "_isNewHire": false,
+        "callerPhone": "3159207115",
+        "callerEmail": "jason.crans@teamtag.com",
+        "company": "TAG",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "blocked"
+      }
+    },
+    {
+      "id": "RITM1951526",
+      "label": "Amanda Morrison — new laptop",
+      "format": "RITM-standard",
+      "covers": [
+        "dashed phone (727-687-5073)",
+        "ship=No gate blocked",
+        "ThinkPad mention in free text"
+      ],
+      "raw": "Requested Item\nRITM1951526\nRequested for\nAmanda Morrison\n Company\nTAG\n Location/Facility – Ship to:\n0001 - PSC 1 - Sanders Creek\n Is this being shipped\nNo\n Contact number\n727-687-5073\nAdditional information\nI currently have T15 thinkPad laptop. I would like to get a new laptop, as this one has been giving me a few issues\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nStandard\nSystem Email sent To:amanda.morrison@teamtag.com",
+      "expected": {
+        "ticketNumber": "RITM1951526",
+        "callerName": "Amanda Morrison",
+        "_isNewHire": false,
+        "callerPhone": "7276875073",
+        "callerEmail": "amanda.morrison@teamtag.com",
+        "company": "TAG",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "blocked"
+      }
+    },
+    {
+      "id": "RITM1978247",
+      "label": "Anna Vladaj — docking station (submitted by Christine Barber)",
+      "format": "RITM-standard",
+      "covers": [
+        "Requested by ≠ Requested for, but NOT a New Hire → recipient is Requested for (Anna)",
+        "inline comma address",
+        "dock-only",
+        "all other equipment -- None --",
+        "Aspen company"
+      ],
+      "raw": "Requested Item\nRITM1978247\nRequested by\nChristine Barber\n Requested for\nAnna Vladaj\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n5687 Frontage Rd, Cleveland, TN 37312\n Contact number\n423-284-2973\nAdditional information\n Do you need a monitor\n-- None --\n Do you need a keyboard\n-- None --\n Do you need a mouse\n-- None --\n Do you need a webcam\n-- None --\nDo you need a headset\n-- None --\nDo you need a docking station\nYes\nSystem Email sent To:christine.barber@aspendental.com, anna.vladaj@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1978247",
+        "callerName": "Anna Vladaj",
+        "_isNewHire": false,
+        "callerPhone": "4232842973",
+        "company": "Aspen",
+        "line1": "5687 Frontage Rd",
+        "line2": null,
+        "city": "Cleveland",
+        "state": "TN",
+        "zip": "37312",
+        "items": [
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1961905",
+      "label": "Henry Allen — laptop (bigger storage)",
+      "format": "RITM-standard",
+      "covers": [
+        "multi-line address with separate Unit line",
+        "Aspen company",
+        "Thinkpad mention in free text"
+      ],
+      "raw": "Requested Item\nRITM1961905\nRequested for\nHenry Allen\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n1 Ferry Road\nUnit 71\nHadlyme, CT 06549\n Contact number\n7573625987\nAdditional information\nI currently have a 16 inch Thinkpad that is extremely slow.\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nStandard\nSystem Email sent To:henry.allen@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1961905",
+        "callerName": "Henry Allen",
+        "_isNewHire": false,
+        "callerPhone": "7573625987",
+        "callerEmail": "henry.allen@aspendental.com",
+        "company": "Aspen",
+        "line1": "1 Ferry Road",
+        "line2": "Unit 71",
+        "city": "Hadlyme",
+        "state": "CT",
+        "zip": "06549",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1979883",
+      "label": "Jennifer Baldwin — full standard kit",
+      "format": "RITM-standard",
+      "covers": [
+        "lowercase no-comma address (50 Bayberry circle liverpool ny 13090)",
+        "full equipment kit",
+        "Wireless keyboard/mouse/headset types",
+        "Chapter company via Company field",
+        "mychapter.com email"
+      ],
+      "raw": "Requested Item\nRITM1979883\nRequested for\nJennifer Baldwin\n Company\nChapter\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n50 Bayberry circle liverpool ny 13090\n Contact number\n6075928770\nAdditional information\n Do you need a monitor\nYes\n Number of monitors\n2\n Do you need a keyboard\nYes\n Keyboard type\nWireless\n Do you need a mouse\nYes\n Mouse type\nWireless\n Do you need a webcam\nYes\nDo you need a headset\nYes\n Headset type\nWireless\nDo you need a docking station\nYes\nSystem Email sent To:jennifer.baldwin@mychapter.com",
+      "expected": {
+        "ticketNumber": "RITM1979883",
+        "callerName": "Jennifer Baldwin",
+        "_isNewHire": false,
+        "callerPhone": "6075928770",
+        "callerEmail": "jennifer.baldwin@mychapter.com",
+        "company": "Chapter",
+        "line1": "50 Bayberry circle",
+        "line2": null,
+        "city": "liverpool",
+        "state": "NY",
+        "zip": "13090",
+        "items": [
+          {
+            "type": "monitor",
+            "qty": 2
+          },
+          {
+            "type": "keyboard",
+            "qty": 1
+          },
+          {
+            "type": "mouse",
+            "qty": 1
+          },
+          {
+            "type": "webcam",
+            "qty": 1
+          },
+          {
+            "type": "headset",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1969026",
+      "label": "Chelsey Schollian — replacement laptop (incomplete address)",
+      "format": "RITM-standard",
+      "covers": [
+        "STREET-ONLY address — no city/state/zip in ticket",
+        "partial address captured as starting point",
+        "completeness checker must flag City/State/ZIP missing",
+        "Aspen company"
+      ],
+      "raw": "Requested Item\nRITM1969026\nRequested for\nChelsey Schollian\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n1846 N 102nd Pl\n Contact number\n6026926478\nAdditional information\nMicrophone does not work well- IT recommended getting a new laptop\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nStandard\nSystem Email sent To:chelsey.schollian@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1969026",
+        "callerName": "Chelsey Schollian",
+        "_isNewHire": false,
+        "callerPhone": "6026926478",
+        "callerEmail": "chelsey.schollian@aspendental.com",
+        "company": "Aspen",
+        "line1": "1846 N 102nd Pl",
+        "line2": null,
+        "city": null,
+        "state": null,
+        "zip": null,
+        "_addressPartial": true,
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open",
+        "_missingRequired": [
+          "city",
+          "state",
+          "zip"
+        ]
+      }
+    },
+    {
+      "id": "RITM1988594",
+      "label": "Jennifer Baldwin — DESKTOP (second request)",
+      "format": "RITM-standard",
+      "covers": [
+        "Computer Type Desktop → desktop item (NOT laptop)",
+        "desktop ships in its own box type",
+        "lowercase no-comma address",
+        "Chapter company"
+      ],
+      "raw": "Requested Item\nRITM1988594\nRequested for\nJennifer Baldwin\n Company\nChapter\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n50 Bayberry circle liverpool ny 13090\n Contact number\n6075928770\nAdditional information\nsecond request\nWorkstation\nComputer Type\nDesktop\nDetails\nStandard Desktop.\nSystem Email sent To:jennifer.baldwin@mychapter.com",
+      "expected": {
+        "ticketNumber": "RITM1988594",
+        "callerName": "Jennifer Baldwin",
+        "_isNewHire": false,
+        "callerPhone": "6075928770",
+        "callerEmail": "jennifer.baldwin@mychapter.com",
+        "company": "Chapter",
+        "line1": "50 Bayberry circle",
+        "line2": null,
+        "city": "liverpool",
+        "state": "NY",
+        "zip": "13090",
+        "items": [
+          {
+            "type": "desktop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1985023",
+      "label": "Stephen Roberts — Adobe Acrobat (software request)",
+      "format": "RITM-software",
+      "covers": [
+        "SOFTWARE-ONLY request → NO shippable item",
+        "no Address required",
+        "Phone number field variant",
+        "blank Company"
+      ],
+      "raw": "Requested Item\nRITM1985023\nItem\nTAG Corporate Software Request\n Requested for\nStephen Roberts\n Company\n Facility\n0001 - PSC 1 - Sanders Creek\n Computer Name\nnot available\n Phone number\n315-591-2580\nAdobe Acrobat\nAdditional Information\nAdobe Acrobat Pro which mirrors the rest of my team\nSystem Email sent To:Stephen.Roberts@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1985023",
+        "callerName": "Stephen Roberts",
+        "_isNewHire": false,
+        "callerPhone": "3155912580",
+        "callerEmail": "stephen.roberts@aspendental.com",
+        "company": "Aspen",
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "SCTASK0531675",
+      "label": "Vincent Wronski — New Hire (flavor A, submitted by Jenna Thomson)",
+      "format": "NewHire-A",
+      "covers": [
+        "New Hire flavor A (First Name / Last Name)",
+        "recipient is the NEW HIRE not the submitter",
+        "submitter recorded separately",
+        ".edu personal email → company stays blank",
+        "Cellphone Number with +1 and (Mobile)",
+        "Personal address inline",
+        "Mouse / Keyboard → both",
+        "Number of monitors → monitor",
+        "Softphone No → no item"
+      ],
+      "raw": "Catalog Task\nSCTASK0531675\nNumber\nSCTASK0531675\nRequest item\nRITM1990942\nRequested for\nJenna Thomson\nLocation\n5800 Executives / Corp Other\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nVicente Ramirez\nShort description\nNew Hire Equipment Request for Vincent  Wronski- 2026-05-26\nDescription\nVariables\n Role of the New Hire\nRemote Worker\n First Name\nVincent \n Last Name\nWronski\n Cellphone Number\n+1 630-605-5432 (Mobile)\n Personal Email Address\nvincent-wronski@uiowa.edu\n Personal address\n1181 Banyon Ct., Naperville, IL 60540 United States of America\n Start Date\n05/26/2026\n Job Title\nCorporate Intern\n Hiring Manager\nJason Vellen\n Department\n5800 Executives / Corp Other\n Computer Type\nLaptop\n Laptop Type\nStandard\n Docking Station\nYes\n Number of monitors\n1\n Mouse / Keyboard\nYes\n Softphone\nNo\nSystem Email sent To:vicente.ramirez@wellnow.com",
+      "expected": {
+        "ticketNumber": "SCTASK0531675",
+        "callerName": "Vincent Wronski",
+        "_isNewHire": true,
+        "_submitter": "Jenna Thomson",
+        "callerPhone": "6306055432",
+        "callerEmail": "vincent-wronski@uiowa.edu",
+        "company": null,
+        "line1": "1181 Banyon Ct.",
+        "line2": null,
+        "city": "Naperville",
+        "state": "IL",
+        "zip": "60540",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          },
+          {
+            "type": "monitor",
+            "qty": 1
+          },
+          {
+            "type": "keyboard",
+            "qty": 1
+          },
+          {
+            "type": "mouse",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1967295",
+      "label": "Jennifer Cajimat — New Hire (flavor B, submitted by Matthew McKinstry)",
+      "format": "NewHire-B",
+      "covers": [
+        "New Hire flavor B (Requested For First/Last Name)",
+        "recipient is the NEW HIRE not the submitter",
+        "New Employee Phone Number / Personal Email / Home address variants",
+        "gmail personal email",
+        "Company field present → Aspen",
+        "double-comma-free inline address with Unit"
+      ],
+      "raw": "Requested Item\nRITM1967295\nNumber\nRITM1967295\nItem\nNew Hire Equipment or User Transfer Request\nRequested for\nMatthew McKinstry\nLocation\n0001 - PSC 1 - Sanders Creek\nAssigned to\nBrandon Hamm\nShort description\nDo you have a New hire or transfer that needs equipment? - Jennifer  Cajimat - 2026-05-18\nDescription\nVariables\nRequested By\nMatthew McKinstry\nCompany\nAspen\nRequested For First Name\nJennifer \nRequested For Last Name\nCajimat\nNew Employee Personal Email\ncajimatj@gmail.com\nNew Employee Phone Number\n8082259637\nStart Date\n05/18/2026\nIs the Employee a New Employee or a Transfer\nNew Employee\n Will the New Employee be fully Remote\nYes\nWhat location Will They Report To\nPSC1 – Syracuse Sanders Creek\nNew Employee Home address\n240 E Silverado Ranch Blvd, Unit 1318, Las Vegas, NV 89183\nWorkstation\n Computer Type\nLaptop\n Please select the laptop type\nWindows\nSoftware\n Do you require additional software to be installed on the computer\nNo\nSystem Email sent To:matthew.mckinstry@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1967295",
+        "callerName": "Jennifer Cajimat",
+        "_isNewHire": true,
+        "_submitter": "Matthew McKinstry",
+        "callerPhone": "8082259637",
+        "callerEmail": "cajimatj@gmail.com",
+        "company": "Aspen",
+        "line1": "240 E Silverado Ranch Blvd",
+        "line2": "Unit 1318",
+        "city": "Las Vegas",
+        "state": "NV",
+        "zip": "89183",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1987569",
+      "label": "Matheus Guedes — ThinkPad performance (troubleshoot first)",
+      "format": "RITM-standard",
+      "covers": [
+        "ship=No gate blocked",
+        "very long Additional Information block (must not break parsing)",
+        "device spec block (AGLT- device name) present",
+        "TAG company"
+      ],
+      "raw": "Requested Item\nRITM1987569\nRequested by\nMatheus Guedes\n Requested for\nMatheus Guedes\n Company\nTAG\n Location/Facility – Ship to:\n0751 TAG Workday Support Costs\n Is this being shipped\nNo\n Contact number\n9177970676\nAdditional information\nI'm experiencing ongoing performance issues with my ThinkPad laptop. The laptop frequently freezes. Teams is especially unstable. Taskbar auto-hide due to my OLED monitor setup. Reboot loop when connected to headset, monitor, or USB accessories.\nDevice name\tAGLT-PW07K1HL\nProcessor\t12th Gen Intel Core i7-12800H\nInstalled RAM\t32.0 GB\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nStandard\nSystem Email sent To:matheus.guedes@teamtag.com",
+      "expected": {
+        "ticketNumber": "RITM1987569",
+        "callerName": "Matheus Guedes",
+        "_isNewHire": false,
+        "callerPhone": "9177970676",
+        "callerEmail": "matheus.guedes@teamtag.com",
+        "company": "TAG",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "blocked"
+      }
+    },
+    {
+      "id": "RITM1991271",
+      "label": "Monika Stellrecht / Alisha Jenkins — care-of address",
+      "format": "RITM-standard",
+      "covers": [
+        "CARE-OF: name on the Address block IS the recipient (Alisha Jenkins ships, Monika is on-behalf-of)",
+        "double-comma City, ST, ZIP (Louisville, KY, 40299)",
+        "Lab Design Laptop type → laptop",
+        "Aspen company",
+        "ticket reassigned to Digital Dentistry (context, not parsed)"
+      ],
+      "raw": "Requested Item\nRITM1991271\nNumber\nRITM1991271\nRequested for\nMonika Stellrecht\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\nAlisha Jenkins\n2914 Arlington Court \nLouisville, KY, 40299\n Contact number\n6064251588\nAdditional information\nThis request is for a Lab Design Desktop setup\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nWindows\n Windows Laptop Type\nLab Design Laptop\nSystem Email sent To:mstellrecht@aspendental.com",
+      "expected": {
+        "ticketNumber": "RITM1991271",
+        "callerName": "Alisha Jenkins",
+        "_onBehalfOf": "Monika Stellrecht",
+        "_addressNameRecipient": "Alisha Jenkins",
+        "_isNewHire": false,
+        "callerPhone": "6064251588",
+        "company": "Aspen",
+        "line1": "2914 Arlington Court",
+        "line2": null,
+        "city": "Louisville",
+        "state": "KY",
+        "zip": "40299",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1049891",
+      "label": "Mona Shah — New Hire (flavor C, submitted by Laura Sage)",
+      "format": "NewHire-C",
+      "covers": [
+        "New Hire flavor C: \"New Hire First Name\" / \"New Hire Last Name\"",
+        "recipient is the NEW HIRE (Mona Shah), not the submitter (Laura Sage)",
+        "blank Company field must NOT grab the next label as its value",
+        "no phone or email anywhere -> both null, _missingRequired flags phone",
+        "bare \"Docking station\" label (lowercase s) detected as dock",
+        "Number of monitors 2; \"Number of tablets required: -- None --\" -> no tablet",
+        "address with no comma on the city line (Itasca IL 60143)"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM1049891\nNumber\nRITM1049891\nItem\nNew Hire Equipment Request\nRequest\nREQ1045551\nRequested for\nLaura Sage\nPrimary Contact Number\nEmail Address\nLocation\n0003 - PSC 3 - Chicago\nLocation Time Zone\nCentral\nDue date\n10/09/2024 12:00:00\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n10/01/2024 12:20:25\nOpened by\nLaura Sage\nPriority\n-- None --\nStage\nCompleted\nState\nClosed Complete\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nNew Hire Equipment Request\nDescription\nVariables\nRequested By\nLaura Sage\n Company\n New Hire First Name\nMona\n New Hire Last Name\nShah\n Start Date\n10/09/2024\n Role Of The New Hire\nPSC Employee\n What PSC Will They Report To?\n0003 - PSC 3 - Chicago\n Where would the new employee be on their first day\n0003 - PSC 3 - Chicago\n Address\n824 Clover Ridge Court\nItasca IL 60143\nWork Station\n Computer Type\nLaptop\n Please select the laptop type\nStandard\nNumber of tablets required\n-- None --\n Do you need a headset\nYes\n Type of headset\nWireless\n Docking station\nYes\nStandard Equipment\n Do you need a monitor\nYes\n Number of monitors\n2\n Do you need a keyboard\nYes\n Keyboard type\nWireless\n Do you need a mouse\nYes\n Mouse type\nWireless\n Do you need a webcam\nYes\n",
+      "expected": {
+        "ticketNumber": "RITM1049891",
+        "callerName": "Mona Shah",
+        "_isNewHire": true,
+        "_submitter": "Laura Sage",
+        "callerPhone": "3154546000",
+        "callerEmail": null,
+        "company": null,
+        "line1": "824 Clover Ridge Court",
+        "line2": null,
+        "city": "Itasca",
+        "state": "IL",
+        "zip": "60143",
+        "configurationItem": null,
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          },
+          {
+            "type": "monitor",
+            "qty": 2
+          },
+          {
+            "type": "keyboard",
+            "qty": 1
+          },
+          {
+            "type": "mouse",
+            "qty": 1
+          },
+          {
+            "type": "webcam",
+            "qty": 1
+          },
+          {
+            "type": "headset",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open",
+        "_phoneDefaulted": true
+      }
+    },
+    {
+      "id": "RITM1314091",
+      "label": "Katianne Cunha — laptop replacement (Aspen)",
+      "format": "RITM-computer",
+      "covers": [
+        "Item: Computer layout with Details spec block",
+        "single-line address with NO comma before city (48 Pine Hill Rd Berwick, ME 03901)",
+        "no email in ticket -> callerEmail null",
+        "Requested by != Requested for but NOT a new hire -> recipient is Requested for"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM1314091\nNumber\nRITM1314091\nItem\nComputer\nRequest\nREQ1309412\nRequested for\nKatianne Cunha\nPrimary Contact Number\nEmail Address\nLocation\n0006 - Remote Users\nLocation Time Zone\nDue date\n02/26/2025 14:49:31\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n02/26/2025 14:49:31\nOpened by\nAhmad Masih Shams Salamudin\nPriority\n-- None --\nStage\nCompleted\nState\nClosed Complete\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nComputer request for Katianne Cunha\nDescription\nVariables\n\n\n\n\n\n\nDetails\nStandard Windows Laptop\nThe default windows laptop used for most corporate users.\nRAM : 16GB DDR4\nStorage : 256GB\nProcessor : Intel Core i5\nIs this for a New Contractor?\nNo\nRequested by\nAhmad Masih Shams Salamudin\n Requested for\nKatianne Cunha\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n48 Pine Hill Rd Berwick, ME 03901\n Contact number\n207-216-3287\nAdditional information\nAs per incident number INC1624010 the laptop is not turning ON\nReplacing the laptop\nComputer type\nLaptop\n Laptop type\nStandard\nSystem Email sent To:\n",
+      "expected": {
+        "ticketNumber": "RITM1314091",
+        "callerName": "Katianne Cunha",
+        "_isNewHire": false,
+        "callerPhone": "2072163287",
+        "callerEmail": null,
+        "company": "Aspen",
+        "line1": "48 Pine Hill Rd",
+        "line2": null,
+        "city": "Berwick",
+        "state": "ME",
+        "zip": "03901",
+        "configurationItem": null,
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1532785",
+      "label": "Karin Kurtz — laptop, ship=No (Teams phone)",
+      "format": "RITM-computer",
+      "covers": [
+        "ship=No -> blocked, no address required",
+        "Contact number is \"Teams\" -> no phone -> DEFAULT_PHONE",
+        "email from System Email To (teamtag.com) but Company field=Aspen wins"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM1532785\nNumber\nRITM1532785\nItem\nComputer\nRequest\nREQ1527737\nRequested for\nKarin Kurtz\nPrimary Contact Number\nEmail Address\nLocation\n0001 - PSC 1 - Sanders Creek\nLocation Time Zone\nEastern\nDue date\n07/24/2025 09:00:24\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n07/24/2025 09:00:24\nOpened by\nAhmad Masih Shams Salamudin\nPriority\n-- None --\nStage\nCompleted\nState\nClosed Complete\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nComputer request for Karin Kurtz\nDescription\nVariables\n\n\n\n\n\n\nDetails\nStandard Windows Laptop\nThe default windows laptop used for most corporate users.\nRAM : 16GB DDR4\nStorage : 256GB\nProcessor : Intel Core i5\nIs this for a New Contractor?\nNo\nRequested by\nAhmad Masih Shams Salamudin\n Requested for\nKarin Kurtz\n Company\nAspen\n Location/Facility – Ship to:\n0001 - PSC 1 - Sanders Creek\n Is this being shipped\nNo\n Contact number\nTeams\nAdditional information\nAs per incident number INC1819921 laptop is not connecting to external display\nReplacing the laptop\nComputer type\nLaptop\n Laptop type\nStandard\nSystem Email sent To:karin.kurtz@teamtag.com\n",
+      "expected": {
+        "ticketNumber": "RITM1532785",
+        "callerName": "Karin Kurtz",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": "karin.kurtz@teamtag.com",
+        "company": "Aspen",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "blocked"
+      }
+    },
+    {
+      "id": "RITM2004522",
+      "label": "Kayla Koglmeier — MacBook, care-of (% Kayla Nardini)",
+      "format": "RITM-computer",
+      "covers": [
+        "care-of address: name line repeats recipient, \"% Kayla Nardini\" is a c/o line -> goes to Line 2",
+        "street is the 3rd address line",
+        "Mac/MacBook -> laptop",
+        "Company TAG wins over email domain"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM2004522\nNumber\nRITM2004522\nItem\nComputer\nRequest\nREQ1998595\nRequested for\nKayla Koglmeier\nPrimary Contact Number\nEmail Address\nLocation\n0006 - Remote Users\nLocation Time Zone\nDue date\n06/02/2026 17:50:06\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n06/01/2026 17:50:07\nOpened by\nKayla Koglmeier\nPriority\n3 - Moderate\nStage\nFulfillment\nState\nOpen\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nComputer Request for Kayla Koglmeier\nDescription\nVariables\nRequested by\nKayla Koglmeier\n Requested for\nKayla Koglmeier\n Company\nTAG\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\nKayla Koglmeier\n% Kayla Nardini\n18133 E El Buho Pequeno\nGold Canyon, AZ 85118\n Contact number\n480-865-8866\nAdditional information\nPlease send to the address indicated above. I will be staying at my moms house the next week\nWorkstation\nComputer Type\nLaptop\n Please select the laptop type\nMac\n Please select Mac model\nMore informationabout Please select Mac model\nMacBook Air 15\nSystem Email sent To:kayla.koglmeier@aspendental.com\n",
+      "expected": {
+        "ticketNumber": "RITM2004522",
+        "callerName": "Kayla Koglmeier",
+        "_isNewHire": false,
+        "callerPhone": "4808658866",
+        "callerEmail": "kayla.koglmeier@aspendental.com",
+        "company": "TAG",
+        "line1": "18133 E El Buho Pequeno",
+        "line2": "% Kayla Nardini",
+        "city": "Gold Canyon",
+        "state": "AZ",
+        "zip": "85118",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM2003123",
+      "label": "Melissa Hastings — monitor + webcam (Standard User Equipment)",
+      "format": "RITM-standard",
+      "covers": [
+        "Number of monitors 1 -> monitor qty 1 (free text \"add a second\" must NOT bump it)",
+        "keyboard/mouse/headset/dock all -- None --",
+        "webcam yes"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM2003123\nNumber\nRITM2003123\nItem\nStandard User Equipment\nRequest\nREQ1997197\nRequested for\nMelissa Hastings\nPrimary Contact Number\nEmail Address\nLocation\n0006 - Remote Users\nLocation Time Zone\nDue date\n06/01/2026 11:54:02\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n06/01/2026 11:54:02\nOpened by\nMelissa Hastings\nPriority\n-- None --\nStage\nFulfillment\nState\nOpen\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nStandard user equipment request for Melissa Hastings\nDescription\nVariables\nRequested by\nMelissa Hastings\n Requested for\nMelissa Hastings\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n7251 NW 5th St\nPlantation, FL 33317\n Contact number\n9546090056\nAdditional information\nAlready have 1 monitor, would like to add a second. First one is a ThinkVision.\n Do you need a monitor\nYes\n Number of monitors\n1\n Do you need a keyboard\n-- None --\n Do you need a mouse\n-- None --\n Do you need a webcam\nYes\nDo you need a headset\n-- None --\nDo you need a docking station\n-- None --\nSystem Email sent To:melissa.hastings@teamtag.com\n",
+      "expected": {
+        "ticketNumber": "RITM2003123",
+        "callerName": "Melissa Hastings",
+        "_isNewHire": false,
+        "callerPhone": "9546090056",
+        "callerEmail": "melissa.hastings@teamtag.com",
+        "company": "Aspen",
+        "line1": "7251 NW 5th St",
+        "line2": null,
+        "city": "Plantation",
+        "state": "FL",
+        "zip": "33317",
+        "items": [
+          {
+            "type": "monitor",
+            "qty": 1
+          },
+          {
+            "type": "webcam",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1959971",
+      "label": "Abby Pierce — full peripheral kit, ship=No",
+      "format": "RITM-standard",
+      "covers": [
+        "ship=No -> blocked, no address",
+        "full kit: 2 monitors, keyboard, mouse, webcam, headset, dock",
+        "manager filed it (Requested by Arie) but recipient is Requested for (Abby)"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM1959971\nNumber\nRITM1959971\nItem\nStandard User Equipment\nRequest\nREQ1954103\nRequested for\nAbby Pierce\nPrimary Contact Number\nEmail Address\nLocation\n0003 - PSC 3 - Chicago\nLocation Time Zone\nCentral\nDue date\n04/28/2026 15:03:45\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n04/28/2026 15:03:45\nOpened by\nArie Polycarpou\nPriority\n-- None --\nStage\nFulfillment\nState\nOpen\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nRon Blair\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nStandard user equipment request for Abby Pierce\nDescription\nVariables\nRequested by\nArie Polycarpou\n Requested for\nAbby Pierce\n Company\nAspen\n Location/Facility – Ship to:\n0003 - PSC 3 - Chicago\n Is this being shipped\nNo\n Contact number\n2178196617\nAdditional information\nThis is my (managers) personal phone number, please call on teams. She starts 5/4.\n Do you need a monitor\nYes\n Number of monitors\n2\n Do you need a keyboard\nYes\n Keyboard type\nWireless\n Do you need a mouse\nYes\n Mouse type\nWireless\n Do you need a webcam\nYes\nDo you need a headset\nYes\n Headset type\nWireless\nDo you need a docking station\nYes\nSystem Email sent To:abby.pierce@aspendental.com, arie.polycarpou@aspendental.com\n",
+      "expected": {
+        "ticketNumber": "RITM1959971",
+        "callerName": "Abby Pierce",
+        "_isNewHire": false,
+        "callerPhone": "2178196617",
+        "callerEmail": "abby.pierce@aspendental.com",
+        "company": "Aspen",
+        "items": [
+          {
+            "type": "monitor",
+            "qty": 2
+          },
+          {
+            "type": "keyboard",
+            "qty": 1
+          },
+          {
+            "type": "mouse",
+            "qty": 1
+          },
+          {
+            "type": "webcam",
+            "qty": 1
+          },
+          {
+            "type": "headset",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "blocked"
+      }
+    },
+    {
+      "id": "RITM1959453",
+      "label": "Anna Vladaj — New Hire flavor B (submitted by Christine Barber)",
+      "format": "NewHire-B",
+      "covers": [
+        "New Hire flavor B with multi-line New Employee Home address (street on one line, city/state/zip on next)",
+        "Desk phone/Softphone Yes -> non-shippable, no item",
+        "software request -> no item",
+        "gmail personal email; Company field Aspen"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM1959453\nNumber\nRITM1959453\nItem\nNew Hire Equipment or User Transfer Request\nRequest\nREQ1953585\nRequested for\nChristine Barber\nPrimary Contact Number\nEmail Address\nLocation\n0006 - Remote Users\nLocation Time Zone\nDue date\n04/29/2026 12:30:48\nConfiguration item\nWatch list\nUnlock Watch list, Selected:\nOpened\n04/28/2026 12:30:48\nOpened by\nChristine Barber\nPriority\n-- None --\nStage\nFulfillment\nState\nWork in Progress\nContact type\nPhone\nAssignment group\nSN Corporate PC Tech Alerts\nAssigned to\nRon Blair\nEPMS patient URL\nAdditional assignee list\nUnlock Additional assignee list, Selected:\nShort description\nDo you have a New hire or transfer that needs equipment? - Anna Vladaj - 2026-05-11\nDescription\nVariables\nRequested By\nChristine Barber\nCompany\nAspen\nRequested For First Name\nAnna\nRequested For Last Name\nVladaj\nNew Employee Personal Email\nak22anna@gmail.com\nNew Employee Phone Number\n4232842973\nStart Date\n05/11/2026\nIs the Employee a New Employee or a Transfer\nNew Employee\n Will the New Employee be fully Remote\nYes\n Will the New Employee be a contingent worker?\nNo\nWhat location Will They Report To\nMore informationabout What location Will They Report To\nRemote\nWhere would the new employee be on their first day\nMore informationabout Where would the new employee be on their first day\nRemote\nNew Employee Home address\n5687 Frontage Rd\nCleveland, TN 37312\nWorkstation\n Computer Type\nLaptop\n Please select the laptop type\nWindows\nStandard Equipment\nNote--\nPSC employees will receive standard hardware at their assigned desks.\nRemote employees will be contacted after Day 1 onboarding meeting regarding their remote hardware needs.\nSoftphone /Extension\n Do you need a Desk phone/Softphone\nYes\nSoftware\n Do you require additional software to be installed on the computer\nYes\nPlease submit below request\nTAG Corporate Software Request\nAdditional Information\nPlease start process for installing Adobe Acrobat\nSystem Email sent To:christine.barber@aspendental.com\n",
+      "expected": {
+        "ticketNumber": "RITM1959453",
+        "callerName": "Anna Vladaj",
+        "_isNewHire": true,
+        "_submitter": "Christine Barber",
+        "callerPhone": "4232842973",
+        "callerEmail": "ak22anna@gmail.com",
+        "company": "Aspen",
+        "line1": "5687 Frontage Rd",
+        "line2": null,
+        "city": "Cleveland",
+        "state": "TN",
+        "zip": "37312",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    }
+  ]
+}
