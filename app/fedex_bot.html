@@ -1448,6 +1448,14 @@ function parseTicket(text) {
     result.confidence.callerPhone = 'low';
   }
 
+  // Company fallback: no Company field and no recognizable email domain -> default
+  // to TAG (the org default) so a shipment isn't blocked on a missing company.
+  if (!result.company) {
+    result.company = 'TAG';
+    result.confidence.company = 'low';
+    result._companyDefaulted = true;
+  }
+
   // 5) Address — try each candidate source; for each, parse with the comma-aware
   // parser first, then fall back to the anchor parser (which handles no-comma,
   // space-only addresses like "68777 Open Field Dr Montrose CO 81401").
