@@ -540,6 +540,7 @@ const ITEM_PRESETS = {
   webcam:   { label: 'Webcam',          weight: 0.7, length: 5,  width: 4,  height: 3 },
   headset:  { label: 'Headset',         weight: 1.5, length: 10, width: 8,  height: 4 },
   dock:     { label: 'Docking Station', weight: 2,   length: 10, width: 8,  height: 3 },
+  wfh:      { label: 'WFH Equipment',    weight: 12,  length: 24, width: 18, height: 8, defaultQty: 3 },
   laptop:   { label: 'Laptop',          weight: 6,   length: 18, width: 14, height: 4 },
   desktop:  { label: 'Desktop / Tower', weight: 20,  length: 24, width: 12, height: 22 },
   ipad:     { label: 'iPad / Tablet',   weight: 2,   length: 10, width: 7,  height: 4 },
@@ -1900,7 +1901,7 @@ function renderItemsList() {
         if (f === 'type') {
           itemsList[i].type = v;
           const p = ITEM_PRESETS[v];
-          if (p) { itemsList[i].weight = p.weight; itemsList[i].length = p.length; itemsList[i].width = p.width; itemsList[i].height = p.height; }
+          if (p) { itemsList[i].weight = p.weight; itemsList[i].length = p.length; itemsList[i].width = p.width; itemsList[i].height = p.height; if (p.defaultQty) itemsList[i].qty = p.defaultQty; }
           renderItemsList();
         } else if (f === 'qty') {
           itemsList[i].qty = Math.max(1, parseInt(v) || 1);
@@ -1929,7 +1930,7 @@ function updateItemSummary() {
 
 function addItem(type = 'custom') {
   const p = ITEM_PRESETS[type] || ITEM_PRESETS.custom;
-  itemsList.push({ type, qty: 1, weight: p.weight, length: p.length, width: p.width, height: p.height });
+  itemsList.push({ type, qty: p.defaultQty || 1, weight: p.weight, length: p.length, width: p.width, height: p.height });
   renderItemsList();
   validate();
 }
