@@ -1030,6 +1030,75 @@
         ],
         "shippingGate": "open"
       }
+    },
+    {
+      "id": "RITM2099001",
+      "label": "Marcus Webb — laptop, suffix-in-name street (Court St Lebanon)",
+      "format": "RITM",
+      "covers": [
+        "splitStreetCity must take the LAST street-suffix, not the first: '12 Court St Lebanon' -> line1 '12 Court St' + city 'Lebanon', not '12 Court' + 'St Lebanon'"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM2099001\nNumber\nRITM2099001\nItem\nComputer\nRequested for\nMarcus Webb\nEmail Address\nLocation\n0006 - Remote Users\nConfiguration item\nShort description\nLaptop replacement for Marcus Webb\nVariables\nRequested by\nMarcus Webb\n Company\nAspen\n Location/Facility – Ship to:\n0006 - Remote Users\n Is this being shipped\nYes\n Address\n12 Court St Lebanon, NH 03766\n Contact number\n6035551212\n Computer Type\nLaptop",
+      "expected": {
+        "ticketNumber": "RITM2099001",
+        "callerName": "Marcus Webb",
+        "_isNewHire": false,
+        "callerPhone": "6035551212",
+        "company": "Aspen",
+        "line1": "12 Court St",
+        "line2": null,
+        "city": "Lebanon",
+        "state": "NH",
+        "zip": "03766",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
+    },
+    {
+      "id": "RITM1966855",
+      "label": "Seth Rivers — Standard Equipment, no-suffix street + spelled-out state",
+      "format": "RITM",
+      "covers": [
+        "no-comma address with NO street suffix and a spelled-out state: '640 N Harvey Oak Park Illinois 60302' -> line1 '640 N Harvey', city 'Oak Park', state 'IL', zip '60302'; '-- None --' keyboard/mouse excluded"
+      ],
+      "raw": "All activities are displayed\nRequested Item\nRITM1966855\nNumber\nRITM1966855\nItem\nStandard User Equipment\nRequest\nREQ1960978\nRequested for\nSeth Rivers\nPrimary Contact Number\nEmail Address\nLocation\n0003 - PSC 3 - Chicago\nVariables\nRequested by\nSeth Rivers\n Requested for\nSeth Rivers\n Company\nTAG\n Location/Facility – Ship to:\n0003 - PSC 3 - Chicago\n Is this being shipped\nYes\n Address\n640 N Harvey Oak Park Illinois 60302\n Contact number\n773-552-2009\nAdditional information\n Do you need a monitor\nYes\n Number of monitors\n2\n Do you need a keyboard\n-- None --\n Do you need a mouse\n-- None --\n Do you need a webcam\nYes\nDo you need a headset\nYes\n Headset type\nWireless\nDo you need a docking station\nYes\nActivities: 6\nSystem\nEmail sent\nTo:seth.rivers@teamtag.com\n",
+      "expected": {
+        "ticketNumber": "RITM1966855",
+        "callerName": "Seth Rivers",
+        "_isNewHire": false,
+        "callerPhone": "7735522009",
+        "callerEmail": "seth.rivers@teamtag.com",
+        "company": "TAG",
+        "line1": "640 N Harvey",
+        "line2": null,
+        "city": "Oak Park",
+        "state": "IL",
+        "zip": "60302",
+        "items": [
+          {
+            "type": "monitor",
+            "qty": 2
+          },
+          {
+            "type": "webcam",
+            "qty": 1
+          },
+          {
+            "type": "headset",
+            "qty": 1
+          },
+          {
+            "type": "dock",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "open"
+      }
     }
   ]
 }

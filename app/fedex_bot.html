@@ -922,7 +922,9 @@ function splitLine1Line2(rawLine1) {
 const STREET_SUFFIX_RE = /\b(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Pl|Place|Ter|Terrace|Trl|Trail|Sq|Square|Loop|Run|Pass|Path|Xing|Crossing|Pike|Row|Walk|Bnd|Bend|Cv|Cove|Plaza|Aly|Alley)\b\.?(?:\s+(?:N|S|E|W|NE|NW|SE|SW)\b)?/i;
 function splitStreetCity(combined) {
   if (!combined || !/^\d/.test(combined)) return null;
-  const sm = combined.match(STREET_SUFFIX_RE);
+  const _re = new RegExp(STREET_SUFFIX_RE.source, 'gi');
+  let _m, sm = null;
+  while ((_m = _re.exec(combined)) !== null) sm = _m;   // take the LAST suffix, not the first
   if (!sm) return null;
   const cut = sm.index + sm[0].length;
   const street = combined.slice(0, cut).trim();
@@ -1199,8 +1201,9 @@ function parseAddressFromText(text) {
       // everything up to and including the suffix (and optional direction) is the
       // street; the remaining trailing words are the city.
       if (beforeParts.length === 1 && /^\d/.test(beforeParts[0])) {
-        const STREET_SUFFIX = /\b(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Pl|Place|Ter|Terrace|Trl|Trail|Sq|Square|Loop|Run|Pass|Path|Xing|Crossing|Pike|Row|Walk|Bnd|Bend|Cv|Cove|Plaza|Aly|Alley)\b\.?(?:\s+(?:N|S|E|W|NE|NW|SE|SW)\b)?/i;
-        const sm = beforeParts[0].match(STREET_SUFFIX);
+        const _reB = new RegExp(STREET_SUFFIX_RE.source, 'gi');
+        let _mB, sm = null;
+        while ((_mB = _reB.exec(beforeParts[0])) !== null) sm = _mB;   // LAST suffix; shared STREET_SUFFIX_RE
         if (sm) {
           const cut = sm.index + sm[0].length;
           const streetPart = beforeParts[0].slice(0, cut).trim();
@@ -1208,6 +1211,21 @@ function parseAddressFromText(text) {
           if (streetPart && cityPart && !/^\d/.test(cityPart) && cityPart.length >= 2) {
             line1 = streetPart;
             city = cityPart;
+          }
+        }
+        // No street suffix at all (e.g. "640 N Harvey Oak Park"): take the trailing
+        // word(s) as the city. Use 2 words when the line is long enough to still
+        // leave a plausible street (number + name), otherwise 1 word.
+        if (!line1) {
+          const toks = beforeParts[0].split(/\s+/);
+          const nCity = toks.length >= 5 ? 2 : 1;
+          if (toks.length >= nCity + 2) {
+            const cityTry = toks.slice(toks.length - nCity).join(' ');
+            const streetTry = toks.slice(0, toks.length - nCity).join(' ');
+            if (!/\d/.test(cityTry) && !US_STATES.has(cityTry.toUpperCase()) && cityTry.length >= 2) {
+              line1 = streetTry;
+              city = cityTry;
+            }
           }
         }
       }
