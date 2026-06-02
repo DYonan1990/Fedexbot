@@ -1099,6 +1099,35 @@
         ],
         "shippingGate": "open"
       }
+    },
+    {
+      "id": "PASTE-ROW-001",
+      "label": "Jazmine Esparza — pasted spreadsheet row (tab-separated) + bare address",
+      "format": "paste",
+      "covers": [
+        "tab-separated roster row: recipient name = first column ('Jazmine Esparza'); bare address line '10 Zurich Ct Crete IL 60417' -> line1 '10 Zurich Ct', city 'Crete', IL 60417; 'Standard Laptop' -> laptop; no phone -> DEFAULT_PHONE"
+      ],
+      "raw": "Jazmine Esparza\tEverheart\tSr Analyst, Planning\t6/8/2026\t0740 TAG Marketing; PSC - Corp\t\tStandard Laptop\n  10 Zurich Ct Crete IL 60417  \n \n",
+      "expected": {
+        "callerName": "Jazmine Esparza",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": null,
+        "line1": "10 Zurich Ct",
+        "line2": null,
+        "city": "Crete",
+        "state": "IL",
+        "zip": "60417",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none"
+      }
     }
   ]
 }

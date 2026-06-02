@@ -1640,6 +1640,21 @@ function parseTicket(text) {
     }
   }
 
+  // 9b) Spreadsheet-row paste (tab-separated): the recipient name is the first
+  // column. Only runs if nothing above found a name (structured tickets keep
+  // their name), and only when the first cell looks like a person's name.
+  if (!result.callerName) {
+    const tabLine = text.split('\n').find(l => l.includes('\t'));
+    if (tabLine) {
+      const first = tabLine.split('\t')[0].trim();
+      if (/^[A-Z][A-Za-z'\u2019.\-]+(?:\s+[A-Z][A-Za-z'\u2019.\-]+){1,2}$/.test(first) &&
+          first.length <= 40 && !FIELD_LABELS_GLOBAL.has(first)) {
+        result.callerName = first;
+        result.confidence.callerName = 'low';
+      }
+    }
+  }
+
   return result;
 }
 
