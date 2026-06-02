@@ -2330,4 +2330,113 @@ function renderQueue() {
           <tr class="border-t border-slate-200 ${r.shipmentType === 'RETURN' ? 'bg-amber-50/40' : ''}">
             <td class="p-2 mono">${i+1}</td>
             <td class="p-2"><span class="pill ${r.shipmentType === 'RETURN' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}">${r.shipmentType === 'RETURN' ? '↩ RET' : '📦 OUT'}</span></td>
-            <td class
+            <td class="p-2 mono">${r.reference}${r._pairedWith ? `<br><span class="text-[10px] text-amber-700">↔ ${r._pairedWith}</span>` : ''}</td>
+            <td class="p-2 text-[11px]">${r._itemLabel || '—'}</td>
+            <td class="p-2 mono text-[10px] text-slate-600">${r._ci || '—'}</td>
+            <td class="p-2 text-[11px]">${r.senderContactName}<br><span class="text-slate-400">${r.senderCity}, ${r.senderState}</span></td>
+            <td class="p-2 text-[11px]">${r.recipientContactName}<br><span class="text-slate-400">${r.recipientCity}, ${r.recipientState}</span></td>
+            <td class="p-2 mono text-[11px]">${r.serviceType}</td>
+            <td class="p-2 mono text-[11px]">${r.packageWeight}lb · ${r.length}×${r.width}×${r.height}</td>
+            <td class="p-2"><button onclick="removeFromQueue(${i})" class="text-rose-500 hover:underline text-xs">Remove</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function removeFromQueue(i) {
+  STATE.queue.splice(i, 1);
+  saveState();
+  renderQueue();
+}
+
+$('clearQueueBtn').onclick = () => {
+  if (confirm(`Clear all ${STATE.queue.length} shipments from the queue?`)) {
+    STATE.queue = [];
+    saveState();
+    renderQueue();
+  }
+};
+
+// =================================================================
+// CSV BUILD & EXPORT
+// =================================================================
+
+function buildCsv() {
+  const headers = [
+    'reference','serviceType','shipmentType',
+    'senderContactName','senderCompany','senderContactNumber','senderLine1','senderLine2','senderCity','senderState','senderPostcode','senderCountry','senderEmail',
+    'recipientContactName','recipientContactNumber','recipientLine1','recipientLine2','recipientCity','recipientState','recipientPostcode','recipientCountry',
+    'numberOfPackages','packageWeight','weightUnits','length','width','height','packageType','currencyType'
+  ];
+  const rows = STATE.queue.map(r => headers.map(h => {
+    const v = r[h] ?? '';
+    if (typeof v === 'string' && (v.includes(',') || v.includes('"') || v.includes('\n'))) {
+      return '"' + v.replace(/"/g, '""') + '"';
+    }
+    return v;
+  }).join(','));
+  return headers.join(',') + '\n' + rows.join('\n') + '\n';
+}
+
+$('generateCsvBtn').onclick = () => {
+  const csv = buildCsv();
+  $('csvOutput').value = csv;
+  $('csvPanel').classList.remove('hidden');
+  $('copyStatus').textContent = 'Select all (⌘/Ctrl+A) inside the box, copy, then paste into a .csv file or directly into Ship Manager.';
+  $('csvPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+$('copyCsvBtn').onclick = async () => {
+  const csv = $('csvOutput').value;
+  try {
+    await navigator.clipboard.writeText(csv);
+    $('copyStatus').innerHTML = '<span class="text-emerald-400">✓ Copied to clipboard.</span>';
+  } catch {
+    $('csvOutput').select();
+    try {
+      document.execCommand('copy');
+      $('copyStatus').innerHTML = '<span class="text-emerald-400">✓ Copied (legacy method).</span>';
+    } catch {
+      $('copyStatus').innerHTML = '<span class="text-amber-400">⚠ Auto-copy blocked. The text is selected — press ⌘/Ctrl+C.</span>';
+    }
+  }
+};
+
+$('downloadCsvBtn').onclick = () => {
+  const csv = $('csvOutput').value;
+  try {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const firstRef = STATE.queue[0]?.reference || 'batch';
+    const dateStr = new Date().toISOString().slice(0,10);
+    a.download = `fedex_batch_${dateStr}_${firstRef}_${STATE.queue.length}rows.csv`;
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('copyStatus').innerHTML = '<span class="text-emerald-400">✓ Download triggered.</span>';
+  } catch {
+    $('copyStatus').innerHTML = '<span class="text-amber-400">⚠ Download blocked. Use Copy to Clipboard instead.</span>';
+  }
+};
+
+$('closeCsvBtn').onclick = () => $('csvPanel').classList.add('hidden');
+
+// =================================================================
+// INIT
+// =================================================================
+
+loadState();
+renderSenderProfileDropdown();
+renderTechnicianDropdown();
+$('serviceType').value = STATE.lastUsedService;
+setMode(STATE.mode);
+renderItemsList();
+renderQueue();
+</script>
+</body>
+</html>
