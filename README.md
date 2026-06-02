@@ -1,4 +1,3 @@
-Bot for fedex
 # FedEx QuickShip
 
 Parses messy ServiceNow tickets (and forwarded emails, signatures, free text) into
