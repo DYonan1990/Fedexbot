@@ -1128,6 +1128,54 @@
         ],
         "shippingGate": "none"
       }
+    },
+    {
+      "id": "TEAMS-MSG-001",
+      "label": "Janae Grupenhagen — Teams message: name + office address with facility prefix and state-route street",
+      "format": "teams",
+      "covers": [
+        "two-line Teams paste: bare name line -> callerName; facility prefix 'Aspen Dental Hixson - ' -> company 'Aspen' and stripped from address; street is state route 'TN-153' (must not be mistaken for the state); 'Ste 100' -> line2; 'Hixson, TN 37343' -> city/state/zip; no phone -> DEFAULT_PHONE; no items"
+      ],
+      "raw": "Janae Grupenhagen\nAspen Dental Hixson - 5550 TN-153 Ste 100 Hixson, TN 37343\n",
+      "expected": {
+        "callerName": "Janae Grupenhagen",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "Aspen",
+        "line1": "5550 TN-153",
+        "line2": "Ste 100",
+        "city": "Hixson",
+        "state": "TN",
+        "zip": "37343",
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "TEAMS-MSG-002",
+      "label": "Nicole Johnson — Teams message: name + lowercase comma-separated address with suite",
+      "format": "teams",
+      "covers": [
+        "two-line Teams paste: bare name line -> callerName; lowercase street kept as typed ('3501 jamboree rd'); 'suite 4000' -> line2; comma-separated city/state/zip; no company signal -> TAG default; no phone -> DEFAULT_PHONE; no items"
+      ],
+      "raw": "Nicole Johnson\n3501 jamboree rd, suite 4000, Newport Beach, CA 92660\n",
+      "expected": {
+        "callerName": "Nicole Johnson",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "3501 jamboree rd",
+        "line2": "suite 4000",
+        "city": "Newport Beach",
+        "state": "CA",
+        "zip": "92660",
+        "items": [],
+        "shippingGate": "none"
+      }
     }
   ]
 }

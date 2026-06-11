@@ -1188,7 +1188,7 @@ function parseAddressFromText(text) {
     // Skip date / log-stamp lines (e.g. "04/22/2026 10:15:32")
     if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(fullLine.trim())) continue;
 
-    let city = null, line1 = null, line2 = '';
+    let city = null, line1 = null, line2 = '', facility = null;
     const beforeState = text.substring(lineStart, index).trim();
 
     if (beforeState) {
@@ -1197,11 +1197,34 @@ function parseAddressFromText(text) {
         .map(p => p.trim().replace(/[\s\-]+$/, ''))
         .filter(Boolean);
 
+      // ===== FACILITY-PREFIX RULE (Teams-message addresses) ==================
+      // A non-numeric facility name joined to the street by a dash, e.g.
+      // "Aspen Dental Hixson - 5550 TN-153 Ste 100 Hixson, TN 37343".
+      // The prefix is not part of the postal address: strip it and return it
+      // as `facility` so the caller can derive the company from it. Only fires
+      // when the remainder starts with a street number, so hyphenated street
+      // names ("TN-153") are untouched. Pinned by TEAMS-MSG-001.
+      if (beforeParts.length >= 1) {
+        const fm = beforeParts[0].match(/^([A-Za-z][^\d,]{1,60}?)\s+[-–—]\s+(\d.*)$/);
+        if (fm) { facility = fm[1].trim(); beforeParts[0] = fm[2].trim(); }
+      }
+
       // SPECIAL CASE: no commas at all, e.g. "68777 Open Field Dr Montrose".
       // Split into street + city using the street-suffix keyword as the boundary:
       // everything up to and including the suffix (and optional direction) is the
       // street; the remaining trailing words are the city.
       if (beforeParts.length === 1 && /^\d/.test(beforeParts[0])) {
+        // Pull a mid-string unit fragment out first ("5550 TN-153 Ste 100
+        // Hixson" -> "5550 TN-153 Hixson" + line2 "Ste 100") so the
+        // street/city boundary logic below sees clean street+city tokens.
+        // Pinned by TEAMS-MSG-001.
+        const um = beforeParts[0].match(UNIT_PATTERN);
+        if (um && um.index > 0) {
+          line2 = um[0].trim();
+          beforeParts[0] = (beforeParts[0].slice(0, um.index) + ' ' +
+                            beforeParts[0].slice(um.index + um[0].length))
+                            .replace(/\s{2,}/g, ' ').trim();
+        }
         const _reB = new RegExp(STREET_SUFFIX_RE.source, 'gi');
         let _mB, sm = null;
         while ((_mB = _reB.exec(beforeParts[0])) !== null) sm = _mB;   // LAST suffix; shared STREET_SUFFIX_RE
@@ -1290,7 +1313,7 @@ function parseAddressFromText(text) {
       if (split.line2) { line1 = split.line1; line2 = split.line2; }
     }
 
-    return { line1, line2, city, state, zip };
+    return { line1, line2, city, state, zip, facility };
   }
   return null;
 }
@@ -1505,7 +1528,31 @@ function parseTicket(text) {
   // Fall back to scanning the whole ticket body (work notes, email signatures).
   if (!result.line1) {
     const parsed = parseAddressFromText(text);
-    if (parsed) applyAddr(parsed, 'medium');
+    if (parsed) {
+      applyAddr(parsed, 'medium');
+      // ===== FACILITY-TO-COMPANY RULE ======================================
+      // A facility prefix names the office the package ships to; its brand
+      // keyword beats the TAG default, but never an explicit Company field or
+      // an email-domain match. Pinned by TEAMS-MSG-001 (Aspen Dental Hixson).
+      if (parsed.facility && (!result.company || result._companyDefaulted)) {
+        const FACILITY_TO_COMPANY = [
+          [/aspen\s*dental/i, 'Aspen'],
+          [/clearchoice/i,    'ClearChoice'],
+          [/wellnow/i,        'WellNow'],
+          [/lovet/i,          'Lovet'],
+          [/chapter/i,        'Chapter'],
+          [/\btag\b/i,        'TAG']
+        ];
+        for (const [re, c] of FACILITY_TO_COMPANY) {
+          if (re.test(parsed.facility)) {
+            result.company = c;
+            result.confidence.company = 'medium';
+            delete result._companyDefaulted;
+            break;
+          }
+        }
+      }
+    }
   }
 
   // 6) Shipping gate
@@ -1656,6 +1703,26 @@ function parseTicket(text) {
     const tabLine = text.split('\n').find(l => l.includes('\t'));
     if (tabLine) {
       const first = tabLine.split('\t')[0].trim();
+      if (/^[A-Z][A-Za-z'\u2019.\-]+(?:\s+[A-Z][A-Za-z'\u2019.\-]+){1,2}$/.test(first) &&
+          first.length <= 40 && !FIELD_LABELS_GLOBAL.has(first)) {
+        result.callerName = first;
+        result.confidence.callerName = 'low';
+      }
+    }
+  }
+
+  // 9c) TEAMS-MESSAGE RULE: a short paste whose FIRST line is a bare person's
+  // name and whose remaining lines produced an address \u2014 the shape of an
+  // address DM'd over Teams ("Janae Grupenhagen\nAspen Dental Hixson - ...").
+  // Deliberately conservative: only short snippets (2\u20134 non-empty lines), only
+  // the first line, and only when an address was actually found. Full
+  // ServiceNow dumps never look like this, so the 32 structured tickets are
+  // unaffected. The name is taken as-is even if it matches a technician \u2014
+  // techs legitimately receive shipments too. Pinned by TEAMS-MSG-001/-002.
+  if (!result.callerName && result.line1) {
+    const snippetLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (snippetLines.length >= 2 && snippetLines.length <= 4) {
+      const first = snippetLines[0];
       if (/^[A-Z][A-Za-z'\u2019.\-]+(?:\s+[A-Z][A-Za-z'\u2019.\-]+){1,2}$/.test(first) &&
           first.length <= 40 && !FIELD_LABELS_GLOBAL.has(first)) {
         result.callerName = first;

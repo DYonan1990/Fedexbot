@@ -3,7 +3,8 @@ Last updated: 2026-06-11 (recovery session) · Read me first every session. Upda
 Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork project instructions).
 
 ## Where things stand — GREEN
-`npm test` = **32/32 tickets passed.** exit 0, verified 2026-06-11 in this folder.
+`npm test` = **34/34 tickets passed.** exit 0, verified 2026-06-11 in this folder.
+(Dataset grew 32 → 34 on 2026-06-11: TEAMS-MSG-001/-002, Daniel-confirmed. See named rules.)
 
 The "lost" hardened build was recovered intact. `Fedexbot-main.zip` (sitting in this folder) is a
 GitHub download of branch `main`, commit `c030ce77df795a975fa5fcdec454435d98872c3e`, zipped
@@ -47,12 +48,28 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
      the sender block (name, work email, 3154546000). The spec chose a private repo for exactly
      this. Revisit when the SharePoint site takes over.
 3. SUPERSEDED same day by decision 4. (Was: canonical path = the OneDrive folder.)
-4. Canonical local path: `C:\Users\A608629\Documents\GitHub\Fedexbot`, a fresh GitHub Desktop
-   clone of the existing GitHub repo (the one serving Pages). Reason: Daniel wants a repeating
-   Claude-edits → Daniel-pushes flow; the OneDrive folder's local git history is unrelated to
-   the GitHub repo, and OneDrive sync can lock `.git` files. The OneDrive folder gets retired
-   once the clone is verified (one canonical copy). CLAUDE.md + PROJECT-INSTRUCTIONS.md move to
-   the clone by hand-copy during setup.
+4. Canonical local path: `C:\Users\A608629\GitHub\Fedexbot`, a fresh GitHub Desktop clone of
+   `DYonan1990/Fedexbot` (the repo serving Pages). Not under `Documents` because Documents is
+   OneDrive-redirected on this machine; the whole point was getting git out of OneDrive.
+   Reason for the clone: Daniel wants a repeating Claude-edits → Daniel-pushes flow; the
+   OneDrive folder's local git history is unrelated to the GitHub repo. The OneDrive folder
+   gets retired once Daniel works a session in the clone (one canonical copy).
+5. Setup executed 2026-06-11 by Claude driving GitHub Desktop + Explorer on Daniel's machine
+   (with his approval): cloned the repo, copied CLAUDE.md + PROJECT-INSTRUCTIONS.md in,
+   committed `f35fe81` "Add working memory and project instructions", pushed. Verified on
+   github.com: CI run `regression #9` green (17s), Pages redeployed, live app loads at
+   https://dyonan1990.github.io/Fedexbot/ (v0.3 UI, sender profile intact).
+   Also fixed during setup: the uploaded PROJECT-INSTRUCTIONS file was scrambled (contained the
+   dataset JSON); rewrote the real one before anything was committed.
+
+## Dataset growth 2026-06-11 (later the same day)
+- Added TEAMS-MSG-001 (Janae Grupenhagen — facility prefix + state-route street + Ste) and
+  TEAMS-MSG-002 (Nicole Johnson — lowercase comma address + suite). Expected values confirmed
+  by Daniel via structured questions (suite → line2; company TAG default for Nicole; lowercase
+  kept as typed). Test-first: 32/34 fail → parser fixes in `app/fedex_bot.html`
+  (facility-prefix strip in Strategy B, mid-string unit pull in the no-comma branch,
+  facility→company map at the fallback call site, 9c Teams-message name rule) → **34/34**.
+  Zero edits to existing tickets. Dataset `version` field left at 1.0 intentionally.
 
 ## Push workflow (agreed 2026-06-11, active until SharePoint go-live)
 1. Claude edits in the canonical clone folder and ends the session green (`npm test` exit 0,
@@ -72,7 +89,10 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   → `_onBehalfOf`; `_addressNameRecipient` records it. RITM1991271.
 - **Phone default rule**: missing/blank/Teams phone → `callerPhone: "3154546000"` +
   `_phoneDefaulted: true`. INC2192773, RITM1532785, RITM1049891, PASTE-ROW-001.
-- **Shipping gate**: always `"open"` or `"none"`, never `"unknown"`. 12 tickets pin it.
+- **Shipping gate**: `"open"` (ship-confirmed / New Hire), `"blocked"` ("Is this being
+  shipped: No"), or `"none"` (no gate field — INC / paste / Teams intake); never `"unknown"`.
+  (Correction 2026-06-11: earlier rebuilds of this file omitted `"blocked"`; the dataset pins
+  all three.)
 - **Completeness checker**: partial addresses → `_addressPartial: true` + `_missingRequired`.
   RITM1969026.
 - **Address hardening**: comma-less street/city splits; no-suffix street + spelled-out state
@@ -83,6 +103,13 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   (ADMI-, gm-, cms, ATGB-); never junk like "Internet"/"Facility". INC2231755, RITM1985023,
   INC2183113.
 - **Pasted spreadsheet row intake**: tab-separated row + bare address parses fully. PASTE-ROW-001.
+- **Teams-message intake** (added 2026-06-11, Daniel-confirmed): a short paste (2–4 lines) whose
+  first line is a bare person's name and whose rest yields an address → name = `callerName`.
+  A facility prefix joined to the street by a dash ("Aspen Dental Hixson - 5550 ...") is
+  stripped from the address and mapped to `company` by brand keyword (beats the TAG default,
+  never beats an explicit Company field or email domain). Mid-string unit fragments ("Ste 100")
+  go to `line2`; route-name streets ("TN-153") survive; lowercase addresses stay as typed;
+  no phone → DEFAULT_PHONE; no items → `[]`; gate `"none"`. TEAMS-MSG-001, TEAMS-MSG-002.
 
 ## Open questions for Daniel (design spec §12) — unchanged
 - Repo collaborators: just Daniel, or trusted teammates too?
@@ -91,11 +118,11 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
 - Stopgap week one: Daniel runs batches himself, or teammates get the synced copy day one?
 
 ## Next actions queue
-1. Daniel runs the one-time clone setup (steps given 2026-06-11 in chat): clone the existing
-   repo to `C:\Users\A608629\Documents\GitHub\Fedexbot`, copy CLAUDE.md +
-   PROJECT-INSTRUCTIONS.md in, commit, push. Verify: CI `regression` green, Pages URL opens.
-2. Next Claude session: Daniel selects the clone folder for this project. Claude re-verifies
-   32/32 there, then the OneDrive `Fedex bot` folder gets retired (Daniel deletes it).
+1. DONE 2026-06-11: clone setup, first commit `f35fe81` pushed, CI `regression #9` green,
+   Pages verified live. (See decision 5.)
+2. Next Claude session: Daniel selects `C:\Users\A608629\GitHub\Fedexbot` as the project
+   folder. Claude re-verifies 32/32 there, refreshes this CLAUDE.md's clone copy, then the
+   OneDrive `Fedex bot` folder gets retired (Daniel deletes it).
 3. From then on: the Push workflow above for every change (parser fixes, new dataset tickets).
 4. SharePoint conversion prep (Daniel's stated direction): Pages is the staging ground; plan the
    SharePoint site move per the rollout plan. Phases 4–5 stay blocked on IT's Phase 3 answer.
