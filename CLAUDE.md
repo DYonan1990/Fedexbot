@@ -193,3 +193,17 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
 6. After SharePoint go-live (deploy guide step 6): retire the public GitHub Pages copy
    (`index.html` + `.nojekyll` removal needs Daniel's say-so) and revisit repo visibility —
    the public-repo caveat from decision 2 finally closes.
+
+## Incident 2026-06-11 (afternoon): truncated app file shipped
+- One of the day's file writes through the OneDrive mount silently truncated
+  `app/fedex_bot.html` (~5.7 KB tail lost: queue-render template, closing
+  `</script></body></html>`). The page shipped broken; `npm test` stayed green
+  because the harness extracts the parser by string markers and never reaches
+  the tail. Same failure mode as the historic "Restore truncated tail" commit.
+- Restored by grafting the tail from the recovery zip's app file (tail region
+  untouched by all of today's changes) at the unique queue-template anchor.
+  Full-script syntax check now part of the drill.
+- **NEW RULE — after ANY write to `app/fedex_bot.html`**: verify all three
+  before calling it done: (1) `grep -c '</script>'` returns 1, (2) file ends
+  with `</html>`, (3) the whole inline script parses (`new Function` check).
+  `npm test` alone does NOT prove the page loads.
