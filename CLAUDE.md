@@ -2,6 +2,7 @@
 Last updated: 2026-06-11 (recovery session) · Read me first every session. Update me last every session.
 Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork project instructions).
 
+- Parser untouched; `npm test` **34/34, exit 0** before and after every task.
 ## Where things stand — GREEN
 `npm test` = **34/34 tickets passed.** exit 0, verified 2026-06-11 in this folder.
 (Dataset grew 32 → 34 on 2026-06-11: TEAMS-MSG-001/-002, Daniel-confirmed. See named rules.)
