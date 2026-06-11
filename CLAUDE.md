@@ -1,11 +1,64 @@
 # CLAUDE.md — FedEx QuickShip working memory
-Last updated: 2026-06-11 (recovery session) · Read me first every session. Update me last every session.
+Last updated: 2026-06-11 (day-one hardening session) · Read me first every session. Update me last every session.
 Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork project instructions).
 
+## What changed this session (2026-06-11, day-one hardening)
+- Implemented `docs/superpowers/specs/2026-06-11-day-one-hardening-design.md` (plan:
+  `docs/superpowers/plans/2026-06-11-day-one-hardening.md`), three changes to `app/fedex_bot.html`:
+  1. **Self-contained file**: Tailwind baked into `<style id="tw-baked">` (15.6 KB, generated once
+     with Tailwind CLI 3.4.17 outside the repo), Google Fonts removed, system font stack. ZERO
+     external requests — fixes the blocked-CDN risk for SharePoint/SPFx. Embed round-trip rerun OK.
+  2. **Verify flags**: low/medium-confidence and defaulted fields get amber outline + chip
+     ("verify" / "defaulted — confirm"), live summary line `#verifySummary` ("Check before
+     adding: …"), flags clear when the tech edits the field. Display only, parser untouched.
+  3. **Report bad parse** button: copies raw ticket + parsed fields + a "should have been"
+     section to the clipboard for pasting to Daniel in Teams. Feeds the dataset loop.
 - Parser untouched; `npm test` **34/34, exit 0** before and after every task.
+- **NEW RULE — styling**: Tailwind no longer runs at runtime. New UI styles must be plain CSS in
+  the existing `<style>` block (or reuse already-baked utilities). New Tailwind class names will
+  NOT style themselves. If truly needed, regenerate via Tailwind CLI 3.4 outside the repo and
+  re-splice `<style id="tw-baked">` (see plan doc Task 3).
+- Parked ideas (Daniel-approved backlog, in order): week-one dataset drive (each tech reports one
+  weird ticket), ZIP↔state sanity check, duplicate-shipment warning (per-browser only),
+  return-flow walkthrough → own spec, printable one-page quick card from `docs/team-guide.md`.
+
+## What changed earlier the same day (2026-06-11, SharePoint handoff package)
+- **Phase 3 answered: the SharePoint team wants an SPFx package** (Daniel, structured question).
+  This closes the spec §12 question "Azure SWA or SPFx?" → SPFx (spec Option B2, sanctioned
+  "only if IT specifically prefers it" — condition met). Phases 4–5 unblock via the SPFx route.
+- Built `spfx/` (new folder at repo root): SPFx **1.21.1** solution wrapping the app as web part
+  "FedEx QuickShip" (supportedHosts: SharePointWebPart, SharePointFullPage, TeamsTab).
+  Pinned 1.21.1 deliberately: last gulp toolchain, Node 22 LTS; SPFx 1.22 switched to Heft.
+  IDs: solution `9871cc40-f784-4295-9041-7188559ba434`, web part `8b2babb0-…-56103cee58f4`.
+- **Invariant 1 preserved**: `spfx/tools/embed-app.js` copies `app/fedex_bot.html` into the
+  bundle AT BUILD TIME (mirrors tests/load-parser.js). Generated module
+  `spfx/src/webparts/quickShip/generated/appHtml.ts` is gitignored. One copy currently sits in
+  this folder because the OneDrive mount blocks deletion — it is AUTO-GENERATED-marked,
+  gitignored, and disposable. Round-trip verified byte-identical to the canonical app file.
+- Built handoff zip `FedExQuickShip-SharePoint-Package-2026-06-11.zip` (repo root, untracked):
+  app copy (SHA-256 6fcf711a… = canonical), spfx/, 3 Word guides (overview + build + deploy,
+  plain-language with Verify lines), README.txt, MANIFEST.txt. Daniel shares the ZIP with the
+  SharePoint team; the .sppkg itself cannot be compiled from this sandbox (needs npm/Node 22 on
+  a real machine — guide doc 2 covers it, incl. a re-scaffold fallback).
+- Verified this session: embed round-trip identical; all spfx JSON parses; zip integrity OK;
+  hash chain canonical=package=zip; `npm test` **34/34, exit 0** before and after (zero edits
+  to app/, tickets/, tests/, .github/).
+- Noted: app is NOT fully self-contained — loads cdn.tailwindcss.com + Google Fonts. Deploy
+  guide has a troubleshooting row for blocked CDNs.
+
 ## Where things stand — GREEN
-`npm test` = **34/34 tickets passed.** exit 0, verified 2026-06-11 in this folder.
-(Dataset grew 32 → 34 on 2026-06-11: TEAMS-MSG-001/-002, Daniel-confirmed. See named rules.)
+`npm test` = **35/35 tickets passed.** exit 0, verified 2026-06-11 in this folder.
+(Dataset grew 32 → 34 → 35 on 2026-06-11: TEAMS-MSG-001/-002, then RETURN-REQ-001,
+all Daniel-confirmed. See named rules.)
+
+## Dataset growth 2026-06-11 (afternoon): RETURN-REQ-001
+- Return-request email, 3-part name fused to the street on one line ("Gabrielle Aragon
+  Flanagan 1220 Stonegate Dr Marengo, IL 60152"). Daniel confirmed all values incl.
+  company TAG default and laptop ×1 from "return her laptop".
+- Parser fix: **Leading-name rule** in parseAddressFromText Strategy B — a strict person-name
+  pattern (2–4 capitalized words, no digits, no unit/PO keywords) is split off a segment that
+  continues with a street number; the name feeds the existing careOf → address-name-is-recipient
+  mechanism (`_addressNameRecipient`). Test-first: 34/35 → fix → **35/35**.
 
 The "lost" hardened build was recovered intact. `Fedexbot-main.zip` (sitting in this folder) is a
 GitHub download of branch `main`, commit `c030ce77df795a975fa5fcdec454435d98872c3e`, zipped
@@ -104,6 +157,9 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   (ADMI-, gm-, cms, ATGB-); never junk like "Internet"/"Facility". INC2231755, RITM1985023,
   INC2183113.
 - **Pasted spreadsheet row intake**: tab-separated row + bare address parses fully. PASTE-ROW-001.
+- **Leading-name rule** (added 2026-06-11, Daniel-confirmed): a strict person name (2–4
+  capitalized words, no digits/unit/PO keywords) fused directly onto a street number in one
+  segment is split off as the recipient via the careOf mechanism. RETURN-REQ-001.
 - **Teams-message intake** (added 2026-06-11, Daniel-confirmed): a short paste (2–4 lines) whose
   first line is a bare person's name and whose rest yields an address → name = `callerName`.
   A facility prefix joined to the street by a dash ("Aspen Dental Hixson - 5550 ...") is
@@ -112,19 +168,28 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   go to `line2`; route-name streets ("TN-153") survive; lowercase addresses stay as typed;
   no phone → DEFAULT_PHONE; no items → `[]`; gate `"none"`. TEAMS-MSG-001, TEAMS-MSG-002.
 
-## Open questions for Daniel (design spec §12) — unchanged
+## Open questions for Daniel (design spec §12)
 - Repo collaborators: just Daniel, or trusted teammates too?
-- IT preference: Azure Static Web App or SPFx?
+- ~~IT preference: Azure Static Web App or SPFx?~~ **ANSWERED 2026-06-11: SPFx** (SharePoint
+  team asked for the files; see SharePoint handoff session above).
 - GitHub: personal free account, or an Aspen Dental org account?
 - Stopgap week one: Daniel runs batches himself, or teammates get the synced copy day one?
 
 ## Next actions queue
 1. DONE 2026-06-11: clone setup, first commit `f35fe81` pushed, CI `regression #9` green,
    Pages verified live. (See decision 5.)
-2. Next Claude session: Daniel selects `C:\Users\A608629\GitHub\Fedexbot` as the project
-   folder. Claude re-verifies 32/32 there, refreshes this CLAUDE.md's clone copy, then the
-   OneDrive `Fedex bot` folder gets retired (Daniel deletes it).
-3. From then on: the Push workflow above for every change (parser fixes, new dataset tickets).
-4. SharePoint conversion prep (Daniel's stated direction): Pages is the staging ground; plan the
-   SharePoint site move per the rollout plan. Phases 4–5 stay blocked on IT's Phase 3 answer.
-5. Revisit repo visibility (public Pages vs private-repo decision) when SharePoint takes over.
+2. Daniel: copy `spfx/` from this OneDrive folder into the canonical clone
+   (`C:\Users\A608629\GitHub\Fedexbot`), commit, push. Suggested message:
+   `Add SPFx 1.21.1 wrapper (build-time embed of app/fedex_bot.html) — SharePoint hosting per Phase 3 answer`.
+   The generated/ subfolder is gitignored and may be skipped when copying.
+3. Daniel: send `FedExQuickShip-SharePoint-Package-2026-06-11.zip` to the SharePoint team.
+   Optional: build the .sppkg himself first (guide doc 2; needs Node 22 → `node --version`).
+4. Next Claude session: Daniel selects `C:\Users\A608629\GitHub\Fedexbot` as the project
+   folder. Claude re-verifies 34/34 there, refreshes that CLAUDE.md, then the OneDrive
+   `Fedex bot` folder gets retired (Daniel deletes it).
+5. From then on: the Push workflow above for every change (parser fixes, new dataset tickets).
+   SPFx update loop: parser fix → 34/34 → bump version in spfx/config/package-solution.json →
+   `npm run package` → new .sppkg to the app catalog.
+6. After SharePoint go-live (deploy guide step 6): retire the public GitHub Pages copy
+   (`index.html` + `.nojekyll` removal needs Daniel's say-so) and revisit repo visibility —
+   the public-repo caveat from decision 2 finally closes.

@@ -1176,6 +1176,36 @@
         "items": [],
         "shippingGate": "none"
       }
+    },
+    {
+      "id": "RETURN-REQ-001",
+      "label": "Gabrielle Aragon Flanagan — return-request email: 3-part name fused to the street on one line",
+      "format": "email",
+      "covers": [
+        "free-text return request: 'ship a box out ... to return her laptop' -> laptop x1; recipient name sits on the SAME line as the street with no separator ('Gabrielle Aragon Flanagan 1220 Stonegate Dr Marengo, IL 60152') -> name = callerName + _addressNameRecipient, street/city split on suffix 'Dr'; no phone -> DEFAULT_PHONE; no company signal -> TAG default; gate none"
+      ],
+      "raw": "Please ship a box out to this former fellow to return her laptop.\n \nGabrielle Aragon Flanagan 1220 Stonegate Dr Marengo, IL 60152",
+      "expected": {
+        "callerName": "Gabrielle Aragon Flanagan",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "1220 Stonegate Dr",
+        "line2": null,
+        "city": "Marengo",
+        "state": "IL",
+        "zip": "60152",
+        "items": [
+          {
+            "type": "laptop",
+            "qty": 1
+          }
+        ],
+        "shippingGate": "none",
+        "_addressNameRecipient": "Gabrielle Aragon Flanagan"
+      }
     }
   ]
 }
