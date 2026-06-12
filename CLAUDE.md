@@ -47,9 +47,19 @@ Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork
   guide has a troubleshooting row for blocked CDNs.
 
 ## Where things stand — GREEN
-`npm test` = **35/35 tickets passed.** exit 0, verified 2026-06-11 in this folder.
-(Dataset grew 32 → 34 → 35 on 2026-06-11: TEAMS-MSG-001/-002, then RETURN-REQ-001,
-all Daniel-confirmed. See named rules.)
+`npm test` = **40/40 tickets passed.** exit 0, verified 2026-06-12 in this folder.
+(Dataset grew 32 → 34 → 35 on 2026-06-11, then → 40 on 2026-06-12: JUMBLED-ADDR-001..004 +
+RETURN-REQ-002, all Daniel-confirmed. See named rules.)
+
+## Dataset growth 2026-06-12: jumbled-address intake (spec + plan in docs/superpowers/)
+- Five tickets from Daniel's real examples: four jumbled one-liners (ZIP floating mid-line,
+  name first/last/own-line/mid + lowercase) and the Ray Lane conversational return email
+  (comma-led name, sign-off "Thanks Dan" must not win). Ray Lane arrived via the
+  **Report bad parse** button — the dataset loop working as designed.
+- Test-first: 35/40 → Strategy A name-lookback (36/40; one regression caught and fixed when a
+  blind string-replace patched the wrong `confidence.callerName` site — the suite caught it
+  immediately) → Strategy C reassembly → **40/40**. File-integrity drill run (tags/`</html>`/
+  full-script parse) + SPFx embed regenerated.
 
 ## Dataset growth 2026-06-11 (afternoon): RETURN-REQ-001
 - Return-request email, 3-part name fused to the street on one line ("Gabrielle Aragon
@@ -160,6 +170,15 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
 - **Leading-name rule** (added 2026-06-11, Daniel-confirmed): a strict person name (2–4
   capitalized words, no digits/unit/PO keywords) fused directly onto a street number in one
   segment is split off as the recipient via the careOf mechanism. RETURN-REQ-001.
+- **Jumbled-address reassembly** (Strategy C, added 2026-06-12, Daniel-confirmed): short
+  anchor-less pastes (1–3 lines, exactly one 5-digit token, real state token) are reassembled
+  by token position — street = number→ZIP, city = word before state, name (any case, 2–4 words)
+  found before the street, after the state, or between ZIP and city → careOf. ALL fields low
+  confidence → amber flags. Typed case kept. JUMBLED-ADDR-001..004.
+- **Inline name-lookback** (Strategy A, added 2026-06-12, Daniel-confirmed): a comma-led
+  person name immediately touching the street number of an inline address ("Ray Lane, 41506…")
+  is the recipient via careOf, confidence medium; greetings/sign-offs elsewhere never match
+  (adjacency required, period excluded from name words). RETURN-REQ-002.
 - **Teams-message intake** (added 2026-06-11, Daniel-confirmed): a short paste (2–4 lines) whose
   first line is a bare person's name and whose rest yields an address → name = `callerName`.
   A facility prefix joined to the street by a dash ("Aspen Dental Hixson - 5550 ...") is

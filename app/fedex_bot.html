@@ -1185,7 +1185,24 @@ function parseAddressFromText(text) {
       const split = splitLine1Line2(line1);
       if (split.line2) { line1 = split.line1; line2 = split.line2; }
     }
-    return { line1, line2, city, state: cand.state, zip: cand.zip };
+    // ===== NAME-LOOKBACK (comma-led name before an inline street) =========
+    // "Cool.  Ray Lane, 41506 N Hudson Trail, ..." -> the name TOUCHING the
+    // street number (comma-separated) is the recipient. Adjacency is the
+    // safety: greetings/sign-offs elsewhere can never match. Word pattern
+    // excludes periods so "Cool." can't glue onto the name.
+    // Pinned by RETURN-REQ-002.
+    let careOf;
+    const streetPos = before.lastIndexOf(line1);
+    if (streetPos > 0) {
+      const pre = before.slice(0, streetPos);
+      const nm = pre.match(/([A-Z][A-Za-z'’\-]*(?:\s+[A-Z][A-Za-z'’\-]*){1,3}),\s*$/);
+      if (nm && nm[1].length <= 40 &&
+          !/\b(PO|Box|Suite|Ste|Apt|Unit|Bldg|Building|Floor|Fl|Room|Rm)\b/i.test(nm[1])) {
+        careOf = nm[1].trim();
+      }
+    }
+    return { line1, line2, city, state: cand.state, zip: cand.zip,
+             careOf, _nameConfidence: careOf ? 'medium' : undefined };
   }
 
   // STRATEGY B — line-based walk-back (multi-line address blocks)
@@ -1341,6 +1358,66 @@ function parseAddressFromText(text) {
     }
 
     return { line1, line2, city, state, zip, facility, careOf: leadingName || undefined };
+  }
+
+  // ===== STRATEGY C — jumbled short-line reassembly ========================
+  // (spec: 2026-06-11-jumbled-address-intake-design.md; JUMBLED-ADDR-001..004)
+  // Last resort for Teams pastes where the ZIP floats mid-line ("4534 N
+  // Greenview 60640 Chicago IL") so no conventional anchor exists. Trigger is
+  // strict — short input, NO anchors anywhere, exactly one 5-digit token, a
+  // real state token — so the structured/A/B paths and all previously pinned
+  // tickets are unreachable from here. Typed case is kept. Every field gets
+  // LOW confidence so the verify flags light up.
+  if (candidates.length === 0) {
+    const snippetLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const zipsAll = [...text.matchAll(/\b(\d{5})\b/g)];
+    if (snippetLines.length >= 1 && snippetLines.length <= 3 && zipsAll.length === 1) {
+      const zip = zipsAll[0][1];
+      const zipLine = snippetLines.find(l => l.includes(zip));
+      if (zipLine) {
+        const clean = t => t.replace(/[.,]+$/, '');
+        const tokens = zipLine.split(/\s+/).map(clean).filter(Boolean);
+        const zipIdx = tokens.findIndex(t => t === zip);
+        let stateIdx = -1;
+        for (let i = tokens.length - 1; i >= 0; i--) {
+          if (i === zipIdx) continue;
+          if (/^[A-Za-z]{2}$/.test(tokens[i]) && US_STATES.has(tokens[i].toUpperCase())) { stateIdx = i; break; }
+        }
+        let streetStart = -1;
+        for (let i = 0; i < tokens.length; i++) {
+          if (i === zipIdx) continue;
+          if (/^\d{1,6}[A-Za-z]?$/.test(tokens[i])) { streetStart = i; break; }
+        }
+        const cityIdx = stateIdx - 1;
+        if (zipIdx !== -1 && stateIdx !== -1 && streetStart !== -1 &&
+            streetStart < zipIdx && cityIdx > -1 && cityIdx !== zipIdx &&
+            /^[A-Za-z]/.test(tokens[cityIdx] || '')) {
+          const line1 = tokens.slice(streetStart, zipIdx).join(' ');
+          const city = tokens[cityIdx];
+          // Name search: (b) before street, (c) after state, (d) between ZIP
+          // and city. 2-4 plain words (any case — lowercase pastes happen),
+          // no digits, no unit/PO keywords.
+          const NAME_OK = w => /^[A-Za-z][A-Za-z'’\-]*$/.test(w);
+          const UNIT_KW = /\b(PO|Box|Suite|Ste|Apt|Unit|Bldg|Building|Floor|Fl|Room|Rm)\b/i;
+          const tryName = arr => {
+            if (arr.length >= 2 && arr.length <= 4 && arr.every(NAME_OK)) {
+              const joined = arr.join(' ');
+              if (joined.length <= 40 && !UNIT_KW.test(joined)) return joined;
+            }
+            return null;
+          };
+          const nameB = tryName(tokens.slice(0, streetStart));
+          const nameC = tryName(tokens.slice(stateIdx + 1));
+          const nameD = tryName(tokens.slice(zipIdx + 1, cityIdx));
+          const careOfC = nameB || nameC || nameD || undefined;
+          if (line1 && city) {
+            return { line1, line2: '', city, state: tokens[stateIdx].toUpperCase(), zip,
+                     careOf: careOfC, _nameConfidence: careOfC ? 'low' : undefined,
+                     _strategy: 'C' };
+          }
+        }
+      }
+    }
   }
   return null;
 }
@@ -1525,7 +1602,7 @@ function parseTicket(text) {
     if (parsed.careOf) {
       result._onBehalfOf = result.callerName || null;  // who asked for it
       result.callerName = parsed.careOf;                // who actually receives it
-      result.confidence.callerName = 'high';
+      result.confidence.callerName = parsed._nameConfidence || 'high';
       result._addressNameRecipient = parsed.careOf;
     }
   };
@@ -1556,7 +1633,7 @@ function parseTicket(text) {
   if (!result.line1) {
     const parsed = parseAddressFromText(text);
     if (parsed) {
-      applyAddr(parsed, 'medium');
+      applyAddr(parsed, parsed._strategy === 'C' ? 'low' : 'medium');
       // ===== FACILITY-TO-COMPANY RULE ======================================
       // A facility prefix names the office the package ships to; its brand
       // keyword beats the TAG default, but never an explicit Company field or

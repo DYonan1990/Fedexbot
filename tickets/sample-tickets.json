@@ -1206,6 +1206,130 @@
         "shippingGate": "none",
         "_addressNameRecipient": "Gabrielle Aragon Flanagan"
       }
+    },
+    {
+      "id": "JUMBLED-ADDR-001",
+      "label": "Daniel Yonan — jumbled one-liner: name first, ZIP floating before city/state",
+      "format": "teams",
+      "covers": [
+        "Strategy C reassembly: 'Name 4534 N Greenview 60640 Chicago IL' -> name before street -> careOf; street cut at ZIP; city = word before state; all low confidence"
+      ],
+      "raw": "Daniel Yonan 4534 N Greenview 60640 Chicago IL",
+      "expected": {
+        "callerName": "Daniel Yonan",
+        "_addressNameRecipient": "Daniel Yonan",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "4534 N Greenview",
+        "line2": null,
+        "city": "Chicago",
+        "state": "IL",
+        "zip": "60640",
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "JUMBLED-ADDR-002",
+      "label": "Daniel Yonan — jumbled one-liner: name LAST, after the state",
+      "format": "teams",
+      "covers": [
+        "Strategy C reassembly: street + ZIP + city + state + trailing name -> name after state -> careOf"
+      ],
+      "raw": "4534 N Greenview 60640 Chicago IL Daniel Yonan",
+      "expected": {
+        "callerName": "Daniel Yonan",
+        "_addressNameRecipient": "Daniel Yonan",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "4534 N Greenview",
+        "line2": null,
+        "city": "Chicago",
+        "state": "IL",
+        "zip": "60640",
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "JUMBLED-ADDR-003",
+      "label": "Daniel Yonan — name on own line, jumbled address line below",
+      "format": "teams",
+      "covers": [
+        "Strategy C parses the jumbled address line; the existing Teams-message name rule (9c) takes the bare first line as callerName (no _addressNameRecipient)"
+      ],
+      "raw": "Daniel Yonan\n4534 N Greenview 60640 Chicago IL",
+      "expected": {
+        "callerName": "Daniel Yonan",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "4534 N Greenview",
+        "line2": null,
+        "city": "Chicago",
+        "state": "IL",
+        "zip": "60640",
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "JUMBLED-ADDR-004",
+      "label": "daniel yonan — lowercase jumbled one-liner, name BETWEEN zip and city",
+      "format": "teams",
+      "covers": [
+        "Strategy C reassembly with lowercase tokens kept as typed; name found mid-string between ZIP and city"
+      ],
+      "raw": "4534 n greenview 60640 daniel yonan chicago IL",
+      "expected": {
+        "callerName": "daniel yonan",
+        "_addressNameRecipient": "daniel yonan",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "4534 n greenview",
+        "line2": null,
+        "city": "chicago",
+        "state": "IL",
+        "zip": "60640",
+        "items": [],
+        "shippingGate": "none"
+      }
+    },
+    {
+      "id": "RETURN-REQ-002",
+      "label": "Ray Lane — conversational return email, comma-led name before a canonical address; sign-off name must not win",
+      "format": "email",
+      "covers": [
+        "Strategy A name-lookback: 'Ray Lane, 41506 N Hudson Trail, Anthem, AZ 85086' inside a sentence -> name adjacent to street number -> careOf; 'Thanks Dan.' ignored; no device named -> items []"
+      ],
+      "raw": "Cool.  Ray Lane, 41506 N Hudson Trail, Anthem, AZ 85086.  IF you provide a return label, after I ensure all is moved I'll ship the old back to you.  Thanks Dan.",
+      "expected": {
+        "callerName": "Ray Lane",
+        "_addressNameRecipient": "Ray Lane",
+        "_isNewHire": false,
+        "callerPhone": "3154546000",
+        "_phoneDefaulted": true,
+        "callerEmail": null,
+        "company": "TAG",
+        "line1": "41506 N Hudson Trail",
+        "line2": null,
+        "city": "Anthem",
+        "state": "AZ",
+        "zip": "85086",
+        "items": [],
+        "shippingGate": "none"
+      }
     }
   ]
 }

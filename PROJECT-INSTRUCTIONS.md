@@ -11,7 +11,7 @@ Maintain and roll out FedEx QuickShip: a single-file, client-side web app (`app/
 ## Hard invariants — MUST hold at all times
 1. `app/fedex_bot.html` is the ONLY place app logic lives. NEVER create a second runnable copy or paste the parser anywhere else. `tests/load-parser.js` extracts the parser from the HTML at run time — that is the only sanctioned reuse.
 2. `tickets/sample-tickets.json` is the contract. Every `expected` block is a Daniel-confirmed business rule. NEVER edit an expected value to make a test pass. If an expected value looks wrong, stop and ask Daniel.
-3. Ship only green. `npm test` MUST end `35/35 tickets passed.` with exit 0 (update the number only when tickets are added) before any commit, zip, or handoff.
+3. Ship only green. `npm test` MUST end `40/40 tickets passed.` with exit 0 (update the number only when tickets are added) before any commit, zip, or handoff.
 4. Parser changes are test-first: add the real ticket with Daniel-confirmed expected values → watch it fail → fix `app/fedex_bot.html` → green, with zero regressions.
 5. Frozen shipping facts — change only on Daniel's explicit instruction: sender block (Daniel Yonan / Aspen Dental / shippinghelp@aspendental.com / 3154546000); defaults PRIORITY_OVERNIGHT, OUTBOUND, YOUR_PACKAGING, USD, LBS; device specs Laptop 5 LBS 15x11x4, single iPad 2 LBS 12x9x2, Standard Equipment expands to three CSV rows with reference suffixes, Custom = typed values; the 29-column CSV header and its order.
 6. One canonical hosted copy. Interim copies get retired, never multiplied.
