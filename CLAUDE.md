@@ -399,3 +399,6 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   Explorer copy), then verified ON the live Pages site: two shipments added, page reloaded,
   queue intact; Save batch / Load batch buttons present; footer reads v0.4.
 - No code changes this session — purely commit, push, redeploy, verify.
+- Deploy note: the Pages "deploy" step of pages-build-deployment #14 failed transiently
+  (build + artifact OK); retriggered with this follow-up commit. Lesson: after pushing the
+  public repo, verify the PAGES deploy conclusion via the API, not just the regression run.
