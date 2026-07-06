@@ -4,17 +4,8 @@
 // load-parser.js
 // ----------------------------------------------------------------------------
 // Pulls parseTicket() (and normalizePhone) STRAIGHT OUT of app/fedex_bot.html.
-//
-// Why it works this way:
-//   The app is the single source of truth. There is no second copy of the
-//   parsing logic to keep in sync. Every test run re-extracts the parser from
-//   the HTML, so the tests always test the real, shipping app.
-//
-// How:
-//   The real <script> block defines pure constants + parsing functions FIRST,
-//   and only later (from `const $ = id => document.getElementById...`) starts
-//   touching the browser DOM. We slice out just the first part and run it in a
-//   sandbox with lightweight browser stubs, then hand back parseTicket.
+// Also surfaces the pure queue-durability helpers when present. The app is the
+// single source of truth; every run re-extracts from the HTML.
 //
 //   If you ever rename those two boundary markers in the HTML, update
 //   START_MARKER / END_MARKER below to match.
@@ -44,9 +35,6 @@ function loadParser() {
 
   const code = html.slice(startIdx, endIdx);
 
-  // Minimal browser stubs. The sliced code only DEFINES functions at load time
-  // (plus a couple of pure object-building loops), so these are never really
-  // exercised — they just keep load-time references from throwing.
   const noop = () => {};
   const storageStub = { getItem: () => null, setItem: noop, removeItem: noop };
   const sandbox = {
@@ -63,8 +51,18 @@ function loadParser() {
   sandbox.window = sandbox;
 
   vm.createContext(sandbox);
+  // typeof guards keep this from throwing during the RED phase (before the
+  // helpers exist), so the parser suite is never coupled to the persistence one.
   vm.runInContext(
-    code + '\n;this.parseTicket = parseTicket;\n;this.normalizePhone = normalizePhone;\n',
+    code +
+      '\n;this.parseTicket = parseTicket;\n;this.normalizePhone = normalizePhone;\n' +
+      ';this.queueHelpers = {' +
+      ' mergeForPersist: (typeof mergeForPersist !== "undefined") ? mergeForPersist : undefined,' +
+      ' dedupeQueueByReference: (typeof dedupeQueueByReference !== "undefined") ? dedupeQueueByReference : undefined,' +
+      ' serializeBatch: (typeof serializeBatch !== "undefined") ? serializeBatch : undefined,' +
+      ' parseBatchFile: (typeof parseBatchFile !== "undefined") ? parseBatchFile : undefined,' +
+      ' buildShipRequest: (typeof buildShipRequest !== "undefined") ? buildShipRequest : undefined' +
+      ' };\n',
     sandbox,
     { filename: 'fedex_bot.parser.js' }
   );
@@ -73,7 +71,11 @@ function loadParser() {
     throw new Error('load-parser: parseTicket was not found after extraction.');
   }
 
-  return { parseTicket: sandbox.parseTicket, normalizePhone: sandbox.normalizePhone };
+  return {
+    parseTicket: sandbox.parseTicket,
+    normalizePhone: sandbox.normalizePhone,
+    queueHelpers: sandbox.queueHelpers || {},
+  };
 }
 
 module.exports = loadParser();

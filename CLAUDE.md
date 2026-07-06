@@ -1,6 +1,147 @@
 # CLAUDE.md — FedEx QuickShip working memory
-Last updated: 2026-06-11 (day-one hardening session) · Read me first every session. Update me last every session.
+Last updated: 2026-06-19 (FedEx live-label Phase 2 flow plan + sandbox runbook written; 40/40 + 3/3 + 8/8 green) · Read me first every session. Update me last every session.
 Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork project instructions).
+
+## What changed this session (2026-06-19, FedEx live-label API — Phase 2 flow plan + sandbox runbook)
+Daniel re-asked the same "integrate FedEx API so it auto-generates and prints labels" question. The
+design spec AND Phase 1 already existed and were green, so this session did NOT re-design. It
+confirmed three decisions via structured questions and produced the next two docs.
+
+Decisions confirmed (Daniel, 2026-06-19, structured questions):
+- Backend = Power Automate flow (matches spec decision 4; Azure Function stays declined).
+- Printing = Zebra thermal, ZPL, auto-print via Zebra Browser Print (matches spec decision 2).
+- FedEx account: Daniel HAS it and can use it. This advances spec open question on production
+  account ownership (still confirm sandbox-vs-production account + meter before go-live).
+
+Wrote two docs (authored in /tmp sandbox, delivered with `cp` + sha256 match + tail/line check —
+NO truncation; the OneDrive-mount hazard held):
+- `docs/superpowers/plans/2026-06-19-fedex-flow-phase2.md` — Phase 2 = the Power Automate flow.
+  HTTP trigger restricted to tenant (Entra OAuth, NOT the anonymous URL), Azure Key Vault Get
+  secret x3 (client id/secret/account, Secure Inputs+Outputs), FedEx OAuth token, Create shipment
+  (account injected via `setProperty(triggerBody(),'accountNumber',...)`), Parse JSON, Response
+  `{trackingNumber, encodedLabel, status, errors}`, Try/Catch scope. 6 tasks, every step has a
+  `Verify:` line. Human-executed by Daniel/IT in M365/Azure (this machine can't reach the tenant).
+- `docs/superpowers/runbooks/2026-06-19-fedex-sandbox-label-proof.md` — by-hand sandbox proof with
+  the EXACT `buildShipRequest` payload (April Walsh outbound). Step 3 saves the real response JSON;
+  the flow's Parse JSON schema is generated from that file (so no path is hardcoded blind).
+
+Flow facts verified against Microsoft Learn (carry into the build): the HTTP trigger's "Who can
+trigger the flow?" has native Entra OAuth modes "Any user in my tenant" / "Specific users" (still
+rolling out by region — confirm it appears); Azure Key Vault Get secret is a premium connector;
+the token to CALL the flow uses audience `https://service.flow.microsoft.com/`. FedEx label/tracking
+path is `output.transactionShipments[0].pieceResponses[0].{trackingNumber, packageDocuments[0].encodedLabel}`
+— flagged in the plan to verify against the saved sandbox response, not trusted blind.
+
+Process note: logged task-observer Observation 3 — brainstorming re-asked questions already locked
+in an existing spec; the fix is to scan docs/superpowers/specs before asking. (skill-observations/log.md)
+
+No app/tests/tickets edits. Gate unchanged this session: `npm test` 40/40 exit 0; ship-request 3/3;
+persistence 8/8. NOT committed (no push from this machine). Suggested commit for Daniel (review diff
+in GitHub Desktop): `docs: FedEx Phase 2 flow plan + sandbox label-proof runbook`.
+
+Next step: Daniel runs the sandbox runbook off-machine (print one real label, save the response
+JSON), then builds the flow per the Phase 2 plan or hands it to IT. After the flow returns a label,
+the next Claude session builds the App-wiring plan (Create+Print buttons, Browser Print, address +
+duplicate guards) — blocked on the flow existing + premium licensing confirmed.
+
+## What changed this session (2026-06-19, FedEx live-label API — Phase 1 plan)
+Daniel asked how to start integrating the FedEx API so the app auto-creates and prints labels.
+Found an already-approved design spec from earlier today that was NOT logged here:
+`docs/superpowers/specs/2026-06-19-fedex-live-label-api-design.md` (status: approved in
+brainstorming, awaiting written-spec review). Daniel reaffirmed the design and chose to proceed to
+a plan, Phase 1 first.
+
+Wrote `docs/superpowers/plans/2026-06-19-fedex-live-label-api.md` (Phase 1 only, TDD, bite-sized).
+Then IMPLEMENTED Phase 1 the same session (Daniel said go):
+- `buildShipRequest(row, opts)` added to `app/fedex_bot.html` in the extractable pure-helper region
+  (just before the `const $ =` END_MARKER); exported via `tests/load-parser.js` typeof guard.
+- New `tests/ship-request.test.js`, 3 golden checks (outbound, return, multi-package). Test-first:
+  RED (function undefined) -> GREEN **3/3**.
+- Gates green together: `npm test` **40/40 exit 0**, persistence **8/8**, ship-request **3/3**;
+  app integrity drill OK (one `</script>`, ends `</html>`, inline script parses).
+- Mapping facts: takes a queue row; OMITS the account number (the flow injects it); weightUnits
+  LBS -> FedEx LB; label STOCK_4X6/ZPLII/COMMON2D; shipDate + pickupType injected (defaults today /
+  DROPOFF_AT_FEDEX_LOCATION, confirm before go-live). The test compares the JSON-normalized form
+  because the function runs in load-parser's vm realm (deepStrictEqual rejects cross-realm protos);
+  that JSON form is also exactly what gets POSTed to FedEx.
+- Version intentionally NOT bumped (still v0.4 / 0.4.0): no UI wired yet, so the visible app is
+  unchanged. Bump when the Create+Print buttons land.
+- NOT committed (no push from this machine). Suggested commit for Daniel (review diff in GitHub
+  Desktop): `feat: buildShipRequest(row) FedEx Ship mapping + golden tests (Phase 1, no UI yet)`.
+
+OneDrive mount hazard hit HARD this session: the Write/Edit TOOLS silently truncated CLAUDE.md AND
+`tests/load-parser.js` mid-file. bash `cp` from a sandbox copy + sha256 verify did NOT truncate.
+Working rule reinforced for this folder: author/modify every repo file in the sandbox and deliver
+with `cp` + sha256 (plus the tail / integrity drill). Do not trust direct Write/Edit on this mount.
+
+Design refined by reading the actual code (carry these into implementation):
+- `buildShipRequest` takes a **queue row**, not the raw parse. A row is already one ship-ready
+  package (Standard Equipment / multi-qty pre-expanded with -1/-2/-RTN refs; returns already have
+  sender/recipient swapped). It is `buildCsv`'s sibling: same row in, FedEx Ship JSON out. Lives in
+  the extractable pure-helper region (lines 495–1939), next to the queue helpers; no DOM, so
+  load-parser can export it like the others.
+- **Account number never enters the app.** `buildShipRequest` omits top-level `accountNumber`; the
+  Power Automate flow injects it from Key Vault. Keeps the shipper account out of the browser and
+  the public repo.
+- Injected opts: `shipDate` (default today), `pickupType` (default DROPOFF_AT_FEDEX_LOCATION), both
+  CONFIRM-before-go-live. `weightUnits` 'LBS' → FedEx 'LB'. Label spec STOCK_4X6 / ZPLII / COMMON2D.
+  No `recipientCompany` exists in the row/CSV (recipient company on the label is parked).
+
+Scope-lock note: this feature adds an external backend (the flow). The design spec amends invariant
+1 (app logic still lives in the one file; the flow is only a secret-holding messenger). Daniel
+reaffirmed the amendment.
+
+Next step: implement the plan (Task 1: `buildShipRequest` outbound mapping, test-first) on Daniel's
+go, or Daniel reviews the plan first. Later phases (flow, Browser Print, UI buttons, guards, batch)
+need IT + premium Power Automate licensing and are outlined in the plan, not built.
+
+## What changed this session (2026-06-19, queue durability: multi-tab fix + Save/Load batch)
+Daniel's bug: building a big multi-person batch, then on reload "only the last/latest entry"
+survived. Root cause was NOT missing persistence (queue already saves to localStorage). It was
+last-writer-wins across tabs/reloads: a stale tab (in-memory queue loaded while empty) overwrote
+the whole `fedexBot.v0.3` key with just its own row; the 200ms debounced save could also drop the
+final add on unload. Confirmed by reading the code + an end-to-end two-tab simulation.
+
+Fix (all in `app/fedex_bot.html`; PARSER UNTOUCHED; STORAGE_KEY kept = 'fedexBot.v0.3' so existing
+saved queues survive the upgrade):
+1. Merge-on-write: pure helpers `dedupeQueueByReference` / `mergeForPersist`. Every add reconciles
+   this tab's in-memory queue with what's currently persisted (another tab may have added rows),
+   appends, de-dupes by `reference`, writes through. Stale tab can no longer drop rows.
+   (`addRowsToQueue` at the two queue-add sites.)
+2. Immediate persistence for queue ops: add/remove/clear call `persistNow()` (synchronous) not the
+   200ms debounce; debounce kept only for non-queue edits (profile fields). `beforeunload` flushes.
+   Closes a found-in-review edge: remove-then-add within 200ms used to RESURRECT the removed row.
+3. Cross-tab sync: a `storage` event listener refreshes this tab's queue from latest persisted.
+4. Save batch / Load batch (.json): portable backup surviving reloads, cleared storage, machine
+   moves. Load MERGES (non-destructive) and is idempotent. Helpers `serializeBatch` /
+   `parseBatchFile` (reject non-JSON and queue-less JSON; accept our wrapper or a bare array).
+5. Restore note on load so the tech trusts the queue is still there.
+Version 0.3.0 -> 0.4.0; footer + report stamp now "QuickShip v0.4".
+
+Testing (test-first): new `tests/persistence.test.js` (8 checks), extracted via `load-parser.js`
+(now also exports the queue helpers behind typeof guards, so the parser suite is never coupled).
+RED 0/8 -> GREEN 8/8. End-to-end two-tab simulation (real functions, shared in-memory localStorage)
+proves: stale-tab add keeps all rows after reload; removed row stays gone after a later add;
+re-add of same ticket de-dupes. `npm test` 40/40 exit 0 before+after. Full inline-script
+`new Function` parse OK; `</script>`==1; ends `</html>`.
+
+NEW NAMED RULE - Queue durability: the queue is the user's work product and must never be silently
+lost. All queue mutations persist immediately and reconcile-by-reference with storage before
+writing; Save/Load .json is the portable backstop. `reference` is the de-dupe key (every shipment
+row already carries a unique one incl. -RTN / -1/-2 suffixes).
+
+Decisions (Daniel-confirmed 2026-06-19 via structured question):
+- De-dupe by reference => re-adding the SAME ticket does NOT create duplicate rows. CONFIRMED keep
+  (prevents accidental double-shipping; aligns with the parked duplicate-shipment-warning idea).
+  Now a business rule: `reference` is the queue de-dupe key.
+- Load batch MERGES into the current queue (non-destructive); Clear queue first to replace.
+
+Env hazard repeat: the OneDrive mount silently truncated a freshly written test file (same as the
+2026-06-11 incident). Worked in a /tmp sandbox copy, delivered to the repo with a sha256
+verify-and-repair loop, re-ran the gate green in the real folder.
+
+NOT pushed - this machine can't reach GitHub. Push steps for BOTH repos were given to Daniel in
+the session (private DYonan1990/Fedex-bot = this folder; public DYonan1990/Fedexbot clone = Pages).
 
 ## What changed this session (2026-06-11, day-one hardening)
 - Implemented `docs/superpowers/specs/2026-06-11-day-one-hardening-design.md` (plan:
@@ -47,7 +188,8 @@ Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork
   guide has a troubleshooting row for blocked CDNs.
 
 ## Where things stand — GREEN
-`npm test` = **40/40 tickets passed.** exit 0, verified 2026-06-12 in this folder.
+`npm test` = **40/40 tickets passed.** exit 0, verified 2026-06-19 in this folder.
+Durability suite: `node tests/persistence.test.js` = **8/8 checks passed.** (queue helpers, 2026-06-19)
 (Dataset grew 32 → 34 → 35 on 2026-06-11, then → 40 on 2026-06-12: JUMBLED-ADDR-001..004 +
 RETURN-REQ-002, all Daniel-confirmed. See named rules.)
 
@@ -135,7 +277,17 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   facility→company map at the fallback call site, 9c Teams-message name rule) → **34/34**.
   Zero edits to existing tickets. Dataset `version` field left at 1.0 intentionally.
 
-## Push workflow (agreed 2026-06-11, active until SharePoint go-live)
+## Repo state change 2026-06-12 (Daniel): TWO repos, push to BOTH
+- Daniel published THIS OneDrive folder as a new PRIVATE repo `DYonan1990/Fedex-bot`
+  (GitHub Desktop shows it as "Fedex-bot", lock icon). This folder is now a live git
+  working copy again — no more hand-copy needed for the private repo.
+- The original PUBLIC repo `DYonan1990/Fedexbot` (clone at `C:\Users\A608629\GitHub\Fedexbot`)
+  still serves GitHub Pages for the team. Changes still reach it via the Explorer copy +
+  GitHub Desktop flow.
+- Daniel's decision: **push every change to BOTH** until the SharePoint site takes over,
+  then retire the public one (which finally closes the public-repo privacy caveat).
+
+## Push workflow (agreed 2026-06-11, amended 2026-06-12 for two repos)
 1. Claude edits in the canonical clone folder and ends the session green (`npm test` exit 0,
    count stated) with a suggested commit message.
 2. Daniel reviews the diff in GitHub Desktop, commits to `main`, pushes.
@@ -184,7 +336,6 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   A facility prefix joined to the street by a dash ("Aspen Dental Hixson - 5550 ...") is
   stripped from the address and mapped to `company` by brand keyword (beats the TAG default,
   never beats an explicit Company field or email domain). Mid-string unit fragments ("Ste 100")
-  go to `line2`; route-name streets ("TN-153") survive; lowercase addresses stay as typed;
   no phone → DEFAULT_PHONE; no items → `[]`; gate `"none"`. TEAMS-MSG-001, TEAMS-MSG-002.
 
 ## Open questions for Daniel (design spec §12)
@@ -198,20 +349,20 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
 1. DONE 2026-06-11: clone setup, first commit `f35fe81` pushed, CI `regression #9` green,
    Pages verified live. (See decision 5.)
 2. Daniel: copy `spfx/` from this OneDrive folder into the canonical clone
-   (`C:\Users\A608629\GitHub\Fedexbot`), commit, push. Suggested message:
-   `Add SPFx 1.21.1 wrapper (build-time embed of app/fedex_bot.html) — SharePoint hosting per Phase 3 answer`.
-   The generated/ subfolder is gitignored and may be skipped when copying.
+   (`C:\Users\A608629\GitHub\Fedexbot`), commit, push.
 3. Daniel: send `FedExQuickShip-SharePoint-Package-2026-06-11.zip` to the SharePoint team.
-   Optional: build the .sppkg himself first (guide doc 2; needs Node 22 → `node --version`).
 4. Next Claude session: Daniel selects `C:\Users\A608629\GitHub\Fedexbot` as the project
-   folder. Claude re-verifies 34/34 there, refreshes that CLAUDE.md, then the OneDrive
-   `Fedex bot` folder gets retired (Daniel deletes it).
+   folder; the OneDrive `Fedex bot` folder gets retired once a session works in the clone.
 5. From then on: the Push workflow above for every change (parser fixes, new dataset tickets).
-   SPFx update loop: parser fix → 34/34 → bump version in spfx/config/package-solution.json →
-   `npm run package` → new .sppkg to the app catalog.
-6. After SharePoint go-live (deploy guide step 6): retire the public GitHub Pages copy
-   (`index.html` + `.nojekyll` removal needs Daniel's say-so) and revisit repo visibility —
-   the public-repo caveat from decision 2 finally closes.
+6. After SharePoint go-live: retire the public GitHub Pages copy (`index.html` + `.nojekyll`
+   removal needs Daniel's say-so) and revisit repo visibility.
+
+## FedEx live-label feature (2026-06-19) — where the docs live
+- Design spec: `docs/superpowers/specs/2026-06-19-fedex-live-label-api-design.md` (approved).
+- Phase 1 plan (DONE, green): `docs/superpowers/plans/2026-06-19-fedex-live-label-api.md`.
+  `buildShipRequest(row)` is in `app/fedex_bot.html`; tests `tests/ship-request.test.js` 3/3.
+- Phase 2 plan (the Power Automate flow): `docs/superpowers/plans/2026-06-19-fedex-flow-phase2.md`.
+- Sandbox proof runbook: `docs/superpowers/runbooks/2026-06-19-fedex-sandbox-label-proof.md`.
 
 ## Incident 2026-06-11 (afternoon): truncated app file shipped
 - One of the day's file writes through the OneDrive mount silently truncated
@@ -226,3 +377,25 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
   before calling it done: (1) `grep -c '</script>'` returns 1, (2) file ends
   with `</html>`, (3) the whole inline script parses (`new Function` check).
   `npm test` alone does NOT prove the page loads.
+- 2026-06-19 recurrence: the same mount truncated CLAUDE.md ITSELF mid-line during this
+  session's Edit (everything from "## Next actions queue" onward was lost). Repaired by
+  rebuilding the tail from in-context content in a sandbox copy and delivering with a
+  line-count + tail + sha256 verify. Lesson generalizes: after ANY write through the OneDrive
+  mount, verify the TAIL (not just the test gate) — CLAUDE.md and docs included, not only the app.
+- 2026-06-19 recurrence #2 (Phase 2 plan session): the Edit tool truncated CLAUDE.md AGAIN,
+  and this time the cut landed on the outputs/ SANDBOX copy (not the OneDrive mount); `cp` then
+  copied the truncated file into the repo. Caught by the post-write tail/line/grep check and
+  repaired by `head -n 338` of the good top + `cat`-appending the tail in /tmp, delivered with
+  `cp` + sha256. HARD RULE: rebuild large memory/doc files by cat-join in /tmp; do NOT trust the
+  Edit/Write tools on big files in this workspace; ALWAYS run the tail + line-count + grep check
+  after delivering ANY file here.
+
+## What changed this session (2026-07-06, ship the queue-durability fix)
+- Daniel re-reported the reload-loses-queue bug from the LIVE site — which still served v0.3.
+  Root cause of the confusion: the 2026-06-19 queue-durability fix (v0.4) was never pushed;
+  it sat uncommitted in this folder. Verified locally before shipping: `npm test` 40/40,
+  persistence 8/8, ship-request 3/3, live site footer confirmed v0.3.
+- Shipped v0.4 to BOTH repos (private Fedex-bot = this folder; public Fedexbot clone via
+  Explorer copy), then verified ON the live Pages site: two shipments added, page reloaded,
+  queue intact; Save batch / Load batch buttons present; footer reads v0.4.
+- No code changes this session — purely commit, push, redeploy, verify.

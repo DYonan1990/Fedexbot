@@ -1,6 +1,6 @@
 {
   "name": "fedex-quickship",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Deterministic parser that turns messy ServiceNow tickets into validated FedEx shipments. The parser lives in app/fedex_bot.html; the golden dataset in tickets/ is the contract.",
   "scripts": {

@@ -81,6 +81,9 @@
   .btn-primary:not(:disabled):hover{ background:var(--brand-700) !important; }
   .btn-accent{ background:var(--accent) !important; color:#fff !important; box-shadow:0 8px 18px -8px rgba(255,102,0,.55); }
   .btn-accent:not(:disabled):hover{ background:var(--accent-600) !important; }
+  .btn-batch{ font-size:11px; line-height:1; padding:6px 12px; border-radius:6px; border:1px solid #cbd5e1; background:#f1f5f9; color:#334155; font-weight:600; cursor:pointer; }
+  .btn-batch:hover{ background:#e2e8f0; }
+  .restore-note{ font-size:12px; background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; border-radius:6px; padding:6px 10px; margin-bottom:8px; }
 
   /* ---------- Step badge ---------- */
   .step{
@@ -345,9 +348,13 @@
       <h2 class="font-extrabold text-slate-900 flex items-center text-[15px]"><span class="step">3</span>Batch queue</h2>
       <div class="flex items-center gap-2">
         <span class="text-xs text-slate-500">Exported as one CSV for Ship Manager Plus upload.</span>
+        <button id="loadBatchBtn" class="btn-batch">Load batch</button>
+        <button id="saveBatchBtn" class="btn-batch hidden">Save batch</button>
+        <input id="loadBatchInput" type="file" accept=".json,application/json" class="hidden">
         <button id="clearQueueBtn" class="text-xs px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 hidden">Clear queue</button>
       </div>
     </div>
+    <div id="restoreNote" class="restore-note hidden"></div>
     <div id="queueTable" class="text-xs overflow-x-auto">
       <div class="text-slate-400 italic text-center py-8">No shipments queued. Parse a ticket and add it to the batch.</div>
     </div>
@@ -477,7 +484,7 @@
 
 <footer class="max-w-7xl mx-auto px-6 py-6 text-xs text-slate-500 border-t border-slate-200 mt-10 flex items-center gap-3 flex-wrap">
   <span class="brand-logo mono text-[10px]">FEDEX</span>
-  <span><strong class="text-slate-700">QuickShip v0.3</strong> · 11 technician sender profiles · CI/asset tracking · paired outbound + return labels. Parser is heuristic — verify every field before generating the CSV. Queue persists in your browser via localStorage.</span>
+  <span><strong class="text-slate-700">QuickShip v0.4</strong> · 11 technician sender profiles · CI/asset tracking · paired outbound + return labels. Parser is heuristic — verify every field before generating the CSV. Your queue is saved in this browser. Use Save batch to download a backup you can re-load on any computer.</span>
 </footer>
 
 <script>
@@ -887,24 +894,103 @@ function loadState() {
 }
 
 let saveTimer = null;
-function saveState() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
-      const ind = $('saveIndicator');
+// Write STATE to localStorage right now and flash the "saved" indicator. Queue
+// mutations call this directly (immediate, never debounced) so a second tab and
+// the next add always read the true current queue; beforeunload calls it too.
+function persistNow() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+    const ind = $('saveIndicator');
+    if (ind) {
       ind.textContent = '● saved ' + new Date().toLocaleTimeString();
       ind.classList.remove('pulse-saved');
       void ind.offsetWidth; // force reflow to restart animation
       ind.classList.add('pulse-saved');
-    } catch (e) {
-      console.warn('Failed to save state:', e);
     }
-  }, 200);
+  } catch (e) {
+    console.warn('Failed to persist state:', e);
+  }
+}
+// Debounced save for high-frequency, non-queue edits (typing in profile fields).
+function saveState() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persistNow, 200);
+}
+
+// The queue exactly as currently saved (a second tab may have changed it).
+function readPersistedQueue() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed.queue) ? parsed.queue : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Add rows so nothing is ever lost: reconcile this tab's in-memory queue with
+// whatever is currently persisted (another tab may have added rows), append the
+// new rows, de-duplicate by reference, then write through immediately.
+function addRowsToQueue(newRows) {
+  const reconciledBase = mergeForPersist(readPersistedQueue(), STATE.queue);
+  STATE.queue = mergeForPersist(reconciledBase, newRows || []);
+  persistNow();
 }
 
 function getAllSenderProfiles() {
   return { ...BUILTIN_SENDER_PROFILES, ...STATE.customSenderProfiles };
+}
+
+// =================================================================
+// QUEUE DURABILITY HELPERS  (pure - unit-tested via tests/persistence.test.js)
+// =================================================================
+// These back the "never lose a batch" guarantee. They are deliberately free of
+// any DOM or localStorage reference so the test harness can extract and run them
+// straight out of this file, the same single-source reuse the parser uses.
+
+// Drop rows whose `reference` repeats, keeping the FIRST occurrence. Rows with a
+// blank/missing reference are never treated as duplicates of one another.
+function dedupeQueueByReference(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const row of (rows || [])) {
+    const ref = (row && typeof row.reference === 'string') ? row.reference : '';
+    if (ref && seen.has(ref)) continue;
+    if (ref) seen.add(ref);
+    out.push(row);
+  }
+  return out;
+}
+
+// Combine an existing (already-persisted) queue with incoming rows WITHOUT
+// dropping anything already saved. This is what stops a stale browser tab - or a
+// re-imported batch file - from clobbering rows another tab already wrote.
+function mergeForPersist(baseQueue, incomingRows) {
+  return dedupeQueueByReference([...(baseQueue || []), ...(incomingRows || [])]);
+}
+
+// Serialize the current queue to a portable batch file: a durable backup that
+// survives reloads, cleared browser storage, and moving between machines/techs.
+function serializeBatch(queue) {
+  return JSON.stringify({
+    kind: 'fedex-quickship-batch',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    queue: Array.isArray(queue) ? queue : []
+  }, null, 2);
+}
+
+// Parse a batch file back into { queue }. Accepts either our wrapper object
+// (with a `queue` array) or a bare array of rows. Throws on anything else so a
+// wrong or corrupt file can never silently wipe the live queue.
+function parseBatchFile(text) {
+  const parsed = JSON.parse(text); // throws on non-JSON
+  if (Array.isArray(parsed)) return { queue: parsed };
+  if (parsed && Array.isArray(parsed.queue)) {
+    return { queue: parsed.queue, kind: parsed.kind, version: parsed.version, exportedAt: parsed.exportedAt };
+  }
+  throw new Error('Not a QuickShip batch file: no queue array found.');
 }
 
 // =================================================================
@@ -1850,6 +1936,85 @@ function normalizePhone(raw) {
 // UI HELPERS
 // =================================================================
 
+// =================================================================
+// FEDEX SHIP REQUEST  (pure: queue row -> Ship API body)
+// -----------------------------------------------------------------
+// Sibling of buildCsv(): same queue row in, FedEx Ship API JSON out.
+// Deliberately OMITS the shipper account number — the backend flow
+// injects accountNumber.value from Key Vault. No secret ever lives
+// in this file. No DOM use, so it stays unit-testable offline via
+// tests/load-parser.js (single source of truth).
+// shipDate / pickupType are injected (default today / drop-off at a
+// FedEx location); both are CONFIRM-before-go-live (see the plan and
+// the design spec open questions).
+// =================================================================
+function buildShipRequest(row, opts) {
+  opts = opts || {};
+  var shipDate = opts.shipDate || new Date().toISOString().slice(0, 10);
+  var pickupType = opts.pickupType || 'DROPOFF_AT_FEDEX_LOCATION';
+
+  function streetLines(a, b) {
+    return [a, b]
+      .map(function (s) { return s == null ? '' : String(s).trim(); })
+      .filter(function (s) { return s.length > 0; });
+  }
+  function contact(name, phone, company) {
+    var c = { personName: name, phoneNumber: phone };
+    if (company && String(company).trim()) c.companyName = String(company).trim();
+    return c;
+  }
+  var units = String(row.weightUnits || 'LBS').toUpperCase() === 'KGS' ? 'KG' : 'LB';
+
+  return {
+    labelResponseOptions: 'LABEL',
+    requestedShipment: {
+      shipper: {
+        contact: contact(row.senderContactName, row.senderContactNumber, row.senderCompany),
+        address: {
+          streetLines: streetLines(row.senderLine1, row.senderLine2),
+          city: row.senderCity,
+          stateOrProvinceCode: row.senderState,
+          postalCode: row.senderPostcode,
+          countryCode: row.senderCountry || 'US'
+        }
+      },
+      recipients: [{
+        contact: contact(row.recipientContactName, row.recipientContactNumber, row.recipientCompany),
+        address: {
+          streetLines: streetLines(row.recipientLine1, row.recipientLine2),
+          city: row.recipientCity,
+          stateOrProvinceCode: row.recipientState,
+          postalCode: row.recipientPostcode,
+          countryCode: row.recipientCountry || 'US'
+        }
+      }],
+      shipDatestamp: shipDate,
+      serviceType: row.serviceType,
+      packagingType: row.packageType,
+      pickupType: pickupType,
+      blockInsightVisibility: false,
+      shippingChargesPayment: { paymentType: 'SENDER' },
+      labelSpecification: {
+        labelStockType: 'STOCK_4X6',
+        imageType: 'ZPLII',
+        labelFormatType: 'COMMON2D'
+      },
+      requestedPackageLineItems: [{
+        weight: { units: units, value: parseFloat(row.packageWeight) },
+        dimensions: {
+          length: parseInt(row.length, 10),
+          width: parseInt(row.width, 10),
+          height: parseInt(row.height, 10),
+          units: 'IN'
+        },
+        customerReferences: [
+          { customerReferenceType: 'CUSTOMER_REFERENCE', value: row.reference }
+        ]
+      }]
+    }
+  };
+}
+
 const $ = id => document.getElementById(id);
 
 // =================================================================
@@ -2325,7 +2490,7 @@ function buildParseReport() {
   const r = currentParse;
   const lines = [];
   lines.push('=== QuickShip bad-parse report ===');
-  lines.push('App: QuickShip v0.3  ·  ' + new Date().toISOString());
+  lines.push('App: QuickShip v0.4  ·  ' + new Date().toISOString());
   lines.push('');
   lines.push('--- RAW TICKET (exactly as pasted) ---');
   lines.push(raw);
@@ -2537,12 +2702,13 @@ $('addToBatchBtn').onclick = () => {
   }
 
   let labelIdx = 0;
+  const newRows = [];
   itemsList.forEach(it => {
     const itemLabel = ITEM_PRESETS[it.type]?.label || it.type;
     for (let i = 0; i < it.qty; i++) {
       labelIdx++;
       const ref = totalLabels === 1 ? baseRef : `${baseRef}-${labelIdx}`;
-      STATE.queue.push({
+      newRows.push({
         reference:    ref,
         serviceType:  $('serviceType').value,
         shipmentType: STATE.mode === 'outbound' ? 'OUTBOUND' : 'RETURN',
@@ -2562,7 +2728,7 @@ $('addToBatchBtn').onclick = () => {
       });
     }
   });
-  saveState();
+  addRowsToQueue(newRows);
   renderQueue();
 
   // Capture context BEFORE the soft reset, so we can offer a return label
@@ -2693,6 +2859,7 @@ $('returnPromptAddBtn').onclick = () => {
 
   const totalReturnLabels = selected.reduce((s, it) => s + (parseInt(it.qty) || 0), 0);
   let labelIdx = 0;
+  const newRows = [];
   selected.forEach(it => {
     const itemLabel = ITEM_PRESETS[it.type]?.label || it.type;
     for (let i = 0; i < it.qty; i++) {
@@ -2703,7 +2870,7 @@ $('returnPromptAddBtn').onclick = () => {
       } else {
         ref = totalReturnLabels === 1 ? `RTN-${ctx.ref}` : `RTN-${ctx.ref}-${labelIdx}`;
       }
-      STATE.queue.push({
+      newRows.push({
         reference:    ref,
         serviceType:  ctx.serviceType,
         shipmentType: 'RETURN',
@@ -2725,7 +2892,7 @@ $('returnPromptAddBtn').onclick = () => {
     }
   });
 
-  saveState();
+  addRowsToQueue(newRows);
   renderQueue();
   closeReturnPrompt();
 
@@ -2740,6 +2907,7 @@ function renderQueue() {
   $('queueCount').textContent = STATE.queue.length;
   $('generateCsvBtn').disabled = STATE.queue.length === 0;
   $('clearQueueBtn').classList.toggle('hidden', STATE.queue.length === 0);
+  $('saveBatchBtn').classList.toggle('hidden', STATE.queue.length === 0);
 
   if (STATE.queue.length === 0) {
     $('queueTable').innerHTML = '<div class="text-slate-400 italic text-center py-8">No shipments queued.</div>';
@@ -2796,14 +2964,14 @@ function renderQueue() {
 
 function removeFromQueue(i) {
   STATE.queue.splice(i, 1);
-  saveState();
+  persistNow();
   renderQueue();
 }
 
 $('clearQueueBtn').onclick = () => {
   if (confirm(`Clear all ${STATE.queue.length} shipments from the queue?`)) {
     STATE.queue = [];
-    saveState();
+    persistNow();
     renderQueue();
   }
 };
@@ -2873,6 +3041,56 @@ $('downloadCsvBtn').onclick = () => {
   }
 };
 
+// ---- Save / Load batch as a portable .json file (durable backup) -----------
+$('saveBatchBtn').onclick = () => {
+  try {
+    const blob = new Blob([serializeBatch(STATE.queue)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `fedex_batch_${dateStr}_${STATE.queue.length}rows.json`;
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    alert('Could not save the batch file: ' + e.message);
+  }
+};
+
+$('loadBatchBtn').onclick = () => $('loadBatchInput').click();
+
+$('loadBatchInput').onchange = (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const loaded = parseBatchFile(reader.result).queue;
+      const before = STATE.queue.length;
+      STATE.queue = mergeForPersist(STATE.queue, loaded);
+      persistNow();
+      renderQueue();
+      const added = STATE.queue.length - before;
+      showRestoreNote('Loaded ' + loaded.length + ' row' + (loaded.length === 1 ? '' : 's') +
+        ' from ' + file.name + ' (' + added + ' new, ' + (loaded.length - added) + ' already queued).');
+    } catch (err) {
+      alert('That is not a valid QuickShip batch file.\n\n' + err.message);
+    } finally {
+      $('loadBatchInput').value = '';
+    }
+  };
+  reader.readAsText(file);
+};
+
+function showRestoreNote(msg) {
+  const el = $('restoreNote');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
 $('closeCsvBtn').onclick = () => $('csvPanel').classList.add('hidden');
 
 // =================================================================
@@ -2886,6 +3104,25 @@ $('serviceType').value = STATE.lastUsedService;
 setMode(STATE.mode);
 renderItemsList();
 renderQueue();
+
+// Keep multiple tabs in sync: when another tab changes storage, refresh this
+// tab's queue from the latest persisted state so neither tab clobbers the other.
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEY) {
+    loadState();
+    renderQueue();
+  }
+});
+
+// Flush the debounced save synchronously on unload so a last-second add survives.
+window.addEventListener('beforeunload', () => { try { persistNow(); } catch (e) {} });
+
+// Reassure the tech on load that their batch is still here.
+if (STATE.queue.length > 0) {
+  showRestoreNote('Restored ' + STATE.queue.length + ' shipment row' +
+    (STATE.queue.length === 1 ? '' : 's') + ' from your last session. ' +
+    'Use Save batch to download a backup you can re-load on any computer.');
+}
 </script>
 </body>
 </html>
