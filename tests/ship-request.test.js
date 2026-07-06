@@ -145,5 +145,19 @@ assert.deepStrictEqual(pkg3.weight, { units: 'LB', value: 2 });
 assert.deepStrictEqual(pkg3.dimensions, { length: 12, width: 9, height: 2, units: 'IN' });
 ok('multi-package row keeps its -2 reference and its own weight/dimensions');
 
-assert.strictEqual(checks, 3, 'expected exactly 3 checks to run');
-console.log('\n' + checks + '/3 ship-request checks passed.');
+// ---- 4. Decimal dimensions must round to >= 1 inch, never truncate to 0 -----
+// A tech typing a custom item dimension of 0.7 in must not ship a 0-inch
+// package (parseInt('0.7') === 0). Audit 2026-07-06 finding #2.
+const decimalRow = Object.assign({}, outboundRow, {
+  reference: 'DECIMAL-TEST',
+  packageWeight: 0.4,
+  length: '0.7', width: '12', height: '0.9'
+});
+const req4 = jsonify(buildShipRequest(decimalRow, { shipDate: '2026-06-19' }));
+const pkg4 = req4.requestedShipment.requestedPackageLineItems[0];
+assert.deepStrictEqual(pkg4.dimensions, { length: 1, width: 12, height: 1, units: 'IN' },
+  'decimal dimensions must round to a minimum of 1 inch, not truncate to 0');
+ok('decimal dimensions round to >= 1 inch (no 0-inch packages)');
+
+assert.strictEqual(checks, 4, 'expected exactly 4 checks to run');
+console.log('\n' + checks + '/4 ship-request checks passed.');

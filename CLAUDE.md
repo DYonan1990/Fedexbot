@@ -1,6 +1,63 @@
 # CLAUDE.md — FedEx QuickShip working memory
-Last updated: 2026-06-19 (FedEx live-label Phase 2 flow plan + sandbox runbook written; 40/40 + 3/3 + 8/8 green) · Read me first every session. Update me last every session.
+Last updated: 2026-07-06 (SharePoint rollout sequenced A/B/C + SPFx build/deploy runbook written; SPFx pkg bumped 0.3→0.4; 40/40 + 3/3 + 8/8 green) · Read me first every session. Update me last every session.
 Operating rules live in `PROJECT-INSTRUCTIONS.md` (repo root, also in the Cowork project instructions).
+
+## What changed this session (2026-07-06, SharePoint rollout sequenced + SPFx build/deploy runbook)
+Daniel ran /product-management:brainstorm: "convert the project into a SharePoint site with connectors,
+was told to make an SPFx package to move over from GitHub." Applied Observation 3's lesson: scanned
+docs/superpowers/specs + CLAUDE.md BEFORE asking. Found the SPFx package already built (2026-06-11) and
+SPFx already chosen (Phase 3), so did NOT re-design — confirmed the decision and SEQUENCED the work.
+
+Decisions confirmed (Daniel, 2026-07-06, structured question):
+- "Connectors" = FedEx labels + shared SharePoint list + hosting ("what it does now, just with
+  SharePoint integration and conversion").
+- Rollout status: NOT handed off yet (the SPFx package has never been sent to IT / SharePoint team).
+- Approved sequencing A → B → C, ship A now:
+  - Track A = Hosting (already built; only compile + deploy remain, both off-machine).
+  - Track B = Shared SharePoint list (NEW, proposed). Blocked on A + IT.
+  - Track C = FedEx live labels (already specced; own track). Blocked on IT + premium licensing.
+
+Verified SPFx build-ready (no compile possible here; verified by inspection + a real embed run):
+- `spfx/tools/embed-app.js` re-embeds `app/fedex_bot.html` at build time (Invariant 1 preserved).
+  Ran it in a /tmp sandbox under Node 22.22.3: embedded the CURRENT v0.4.0 app (155,674 chars; the
+  generated module contains the sender email, `QuickShip v0.4`, and `buildShipRequest`). The committed
+  `generated/appHtml.ts` is stale (150,598 chars) but is gitignored and the build regenerates it.
+- `QuickShipWebPart.ts` frames the app in an iframe via `srcdoc = APP_HTML`, so localStorage persists
+  per user and CSV downloads work. Manifest `supportedHosts` = SharePointWebPart/SharePointFullPage/
+  TeamsTab. `config.json` bundle wired. `skipFeatureDeployment: true` (tenant-wide deploy).
+
+Changed (SPFx packaging only; NO app/tests/tickets edits):
+- Bumped the SPFx package version 0.3.0.0 → 0.4.0.0 (`spfx/config/package-solution.json` solution +
+  feature) and `spfx/package.json` 0.3.0 → 0.4.0 so the deployed package matches the v0.4.0 app it
+  embeds. Dependency versions untouched (1.21.1 x8, etc.). Delivered via /tmp + cp + sha256 verify.
+
+Wrote two docs (authored in /tmp sandbox, delivered with cp + sha256 + tail/line check — OneDrive
+mount truncation hazard held):
+- `docs/superpowers/plans/2026-07-06-sharepoint-rollout-sequenced.md` — the A/B/C tracks, the shared-
+  list proposal (with the PII governance flag), and a paste-ready one-message IT ask that surfaces all
+  three permissions in one round (hosting now, list next, flow later).
+- `docs/superpowers/runbooks/2026-07-06-spfx-build-and-deploy.md` — click-by-click build (Node 22,
+  `npm install`, `npm run package` → `spfx/sharepoint/solution/fedex-quickship.sppkg`) and deploy,
+  grounded in Microsoft Learn: upload the .sppkg → check "Make this solution available to all sites in
+  the organization" → Deploy → "Sync to Teams" from the ribbon → add the Teams tab. Human-executed off
+  this machine (can't reach the tenant). Includes the lighter self-contained-HTML fallback (spec B1).
+
+Track B named idea (shared SharePoint list): once hosted as an SPFx web part, the app runs in the
+SharePoint page as the signed-in user and can read/write a SharePoint list via the built-in REST API —
+no Azure, no separate backend, no secrets. Replaces per-browser localStorage and kills the multi-tab
+"only last entry survived" class of bugs. GOVERNANCE FLAG: today recipient name+address never leave the
+browser (spec §10); a shared list stores that shipment data in-tenant. In-tenant + sign-in, likely fine,
+but confirm with IT/security before building. No parser/CSV change implied (same shipment rows).
+
+Gate re-verified this session (zero edits to app/tests/tickets): `npm test` 40/40 exit 0;
+ship-request 3/3; persistence 8/8.
+
+NOT committed (no push from this machine). Suggested commit for Daniel (review diff in GitHub Desktop):
+`docs: sequenced SharePoint rollout plan + SPFx build/deploy runbook; bump SPFx pkg to 0.4.0`.
+
+Next step: Daniel sends the IT ask (plan §6). On the hosting yes, run the build/deploy runbook (or hand
+it to IT) to get the Teams tab live = Track A done. Then decide Track B (shared list) pending IT's
+governance answer; Track C (FedEx flow) stays its own track, blocked on premium licensing.
 
 ## What changed this session (2026-06-19, FedEx live-label API — Phase 2 flow plan + sandbox runbook)
 Daniel re-asked the same "integrate FedEx API so it auto-generates and prints labels" question. The
@@ -402,3 +459,48 @@ modified (zip's version replaced it). No remote — Phase 1 (private GitHub push
 - Deploy note: the Pages "deploy" step of pages-build-deployment #14 failed transiently
   (build + artifact OK); retriggered with this follow-up commit. Lesson: after pushing the
   public repo, verify the PAGES deploy conclusion via the API, not just the regression run.
+- Audit 2026-07-06 (post-v0.4 ship): full findings in
+  `docs/superpowers/reviews/2026-07-06-audit-findings.md` — 4 confirmed
+  functional bugs (storage-sync mode clobber; decimal dims -> 0; manual
+  return swallowed by de-dupe; parse-over-parse field bleed), XSS-escaping
+  gap, Strategy-C state false positive, v0.3 header badge, plus a PII
+  inventory of the public repo (36 names / 29 home addresses public —
+  decision pending). CSV escaping/ZIP+4/return-swap probed and NOT bugs.
+- PII decision (Daniel, 2026-07-06): public-repo dataset PII ACCEPTED until SharePoint
+  go-live (option c). Revisit at retirement of the public repo — see audit doc.
+
+## What changed this session (2026-07-06, audit + top-5 fixes applied)
+- Ran a full audit (independent subagent code review + probe verification + PII/compliance
+  pass). Findings doc: `docs/superpowers/reviews/2026-07-06-audit-findings.md`.
+- Daniel chose: implement top 4 bugs + version badge; ACCEPT public-repo PII until SharePoint.
+- Applied 5 fixes to `app/fedex_bot.html` (all confirmed by probes first):
+  1. storage listener copies ONLY the queue (was `loadState()` → clobbered STATE.mode across
+     tabs, building a malformed return-shaped row on next Add).
+  2. decimal package dims round to >= 1 in (was `parseInt('0.7')`=0 → 0-inch package) — fixed
+     in BOTH `buildShipRequest` (API path) and the row-build (CSV path).
+  3. Return-mode MANUAL add now suffixes `-RTN` (was reusing baseRef → collided with a queued
+     outbound of the same ticket and got silently swallowed by reference de-dupe).
+  4. parse handler clears stale recipient/sender/reference fields before applying a new parse
+     (was: ticket B inherited ticket A's line2/reference and validated green).
+  5. header badge v0.3 → v0.4 (footer already said v0.4).
+- Test-first: added ship-request check #4 (decimal→1in), RED→GREEN. Gates: `npm test` 40/40,
+  persistence 8/8, ship-request **4/4**, SPFx embed round-trip OK, full-script parse OK,
+  `</script>`==1, ends `</html>`. Diffed the final app file against committed HEAD — exactly
+  the 5 intended edits, zero artifacts.
+- NOT pushed (no push from this machine). Suggested commit for Daniel:
+  `fix: audit top-5 (cross-tab mode clobber, decimal dims, manual-return dedupe, parse field
+  bleed, version badge) + ship-request 4/4`.
+- Parked (Daniel deferred): XSS output-escaping (esc() helper), Strategy-C ZIP↔state sanity
+  guard, and the minor nits (CSV formula-injection prefix guard, dead 'Phone number' branch,
+  duplicated regexes) — all in the audit doc.
+
+## Incident 2026-07-06: Edit tool truncated app AND test file mid-session (again)
+- The Write/Edit tools on the OneDrive mount truncated `app/fedex_bot.html` (tail from the
+  loadBatch handler onward lost) AND `tests/ship-request.test.js` (check #4 cut mid-comment).
+  `npm test` stayed green because it extracts the parser by top-of-file markers and the test
+  file silently ran 3 checks instead of 4 — neither caught the truncation.
+- Repaired by rebuilding from committed HEAD in the /tmp sandbox: grafted the pristine tail,
+  re-applied the lost edit, delivered with `cp` + sha256, then `diff` vs HEAD proved only the
+  intended edits were present. REINFORCED RULE: never trust Write/Edit on this mount for these
+  files — author in /tmp, deliver with `cp`, and always run the tail/`</script>`/full-parse
+  drill AND confirm the expected test COUNT (4/4 here), not just "green".

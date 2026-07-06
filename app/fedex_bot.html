@@ -134,7 +134,7 @@
       <div class="flex items-center gap-3">
         <div class="brand-logo mono text-xs">FEDEX</div>
         <h1 class="text-xl font-extrabold tracking-tight">QuickShip</h1>
-        <span class="mono text-[11px] text-white/45 border border-white/20 rounded-full px-2 py-0.5">v0.3</span>
+        <span class="mono text-[11px] text-white/45 border border-white/20 rounded-full px-2 py-0.5">v0.4</span>
       </div>
       <p class="text-xs text-white/55 mt-1.5">ServiceNow ticket → validated shipment → Ship Manager CSV · Outbound &amp; Return labels</p>
     </div>
@@ -2002,9 +2002,13 @@ function buildShipRequest(row, opts) {
       requestedPackageLineItems: [{
         weight: { units: units, value: parseFloat(row.packageWeight) },
         dimensions: {
-          length: parseInt(row.length, 10),
-          width: parseInt(row.width, 10),
-          height: parseInt(row.height, 10),
+          // Round to a minimum of 1 inch — parseInt('0.7') is 0, which would
+          // ship a 0-inch package. Audit 2026-07-06 finding #2. Kept inline
+          // (not a shared helper) so load-parser's vm extraction stays
+          // self-contained.
+          length: Math.max(1, Math.round(parseFloat(row.length) || 0)),
+          width: Math.max(1, Math.round(parseFloat(row.width) || 0)),
+          height: Math.max(1, Math.round(parseFloat(row.height) || 0)),
           units: 'IN'
         },
         customerReferences: [
@@ -2294,6 +2298,16 @@ $('parseBtn').onclick = () => {
 
   const r = parseTicket(text);
   currentParse = r;
+
+  // Clear stale destination/sender/reference fields before applying the new
+  // parse. applyParseToForm only assigns fields the parse found, so without
+  // this a second ticket that lacks (e.g.) line2 or a ticket number would keep
+  // the previous ticket's values and validate green. Audit 2026-07-06 finding #4.
+  [
+    'recipName','recipPhone','recipLine1','recipLine2','recipCity','recipState','recipZip',
+    'senderName','senderPhone','senderCompany','senderLine1','senderLine2','senderCity','senderState','senderZip',
+    'reference'
+  ].forEach(id => { $(id).value = ''; $(id).classList.remove('field-ok','field-error'); });
 
   let html = '';
 
@@ -2707,7 +2721,13 @@ $('addToBatchBtn').onclick = () => {
     const itemLabel = ITEM_PRESETS[it.type]?.label || it.type;
     for (let i = 0; i < it.qty; i++) {
       labelIdx++;
-      const ref = totalLabels === 1 ? baseRef : `${baseRef}-${labelIdx}`;
+      // Return-mode manual adds suffix -RTN (matching the return-prompt flow) so
+      // a return never collides with a queued outbound of the same ticket and
+      // gets silently swallowed by reference de-dupe. Audit 2026-07-06 finding #3.
+      const suffix = totalLabels === 1 ? '' : `-${labelIdx}`;
+      const ref = STATE.mode === 'outbound'
+        ? `${baseRef}${suffix}`
+        : `${baseRef}-RTN${totalLabels === 1 ? '' : labelIdx}`;
       newRows.push({
         reference:    ref,
         serviceType:  $('serviceType').value,
@@ -2717,9 +2737,9 @@ $('addToBatchBtn').onclick = () => {
         numberOfPackages: 1,
         packageWeight:    parseFloat(it.weight),
         weightUnits:      'LBS',
-        length:           parseInt(it.length),
-        width:            parseInt(it.width),
-        height:           parseInt(it.height),
+        length:           Math.max(1, Math.round(parseFloat(it.length) || 0)),
+        width:            Math.max(1, Math.round(parseFloat(it.width) || 0)),
+        height:           Math.max(1, Math.round(parseFloat(it.height) || 0)),
         packageType:      'YOUR_PACKAGING',
         currencyType:     'USD',
         _itemLabel:       itemLabel,
@@ -3109,7 +3129,14 @@ renderQueue();
 // tab's queue from the latest persisted state so neither tab clobbers the other.
 window.addEventListener('storage', (e) => {
   if (e.key === STORAGE_KEY) {
-    loadState();
+    // Copy ONLY the queue from the other tab — never mode/profiles. A full
+    // loadState() here would silently flip this tab's outbound/return mode to
+    // match the other tab and build a malformed row on the next Add.
+    // Audit 2026-07-06 finding #1.
+    try {
+      const parsed = JSON.parse(e.newValue || localStorage.getItem(STORAGE_KEY) || '{}');
+      if (parsed && Array.isArray(parsed.queue)) STATE.queue = parsed.queue;
+    } catch (_) {}
     renderQueue();
   }
 });
